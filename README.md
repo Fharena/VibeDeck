@@ -69,12 +69,13 @@ docs/
 - Cursor extension이 `VibeDeck: Open Mobile Bootstrap` / `VibeDeck: Copy Mobile Bootstrap Link`로 LAN 기준 QR/deep link(`vibedeck://bootstrap`)를 제공
 - 모바일 앱이 deep link를 수신하면 agent/signaling/thread를 즉시 적용하고, 최근 연결 host도 함께 기억함
 - 모바일 메인 셸이 Cursor 계열 dark session feed로 정리되어 요청 작성, 작업 로그, 패치/실행 요약, 세션 복구 상태를 한 화면 흐름으로 확인 가능
+- 메인 셸의 workstream 액션에서 터미널 출력과 파일 포커스 시트를 바로 열어 실행 상태와 변경 파일을 확인 가능
 
 ## 세팅 방향
 
 - 모바일 앱은 `GET /v1/agent/bootstrap`, 최근 host 기억, `vibedeck://bootstrap` deep link를 사용해 URL 입력을 거의 제거하는 방향으로 유지
 - IDE 쪽은 extension 또는 배포 가능한 패키지로 최소 세팅만 요구하는 방향으로 유지
-- 현재는 `extensions/vibedeck-bridge` VSIX, extension local agent 자동 부트스트랩, shared thread history 영속화, 모바일 bootstrap 자동 세팅 v2(QR/deep link), mobile/cursor live session sync, 모바일 단일 shared session 셸까지 갖춘 상태입니다. 다음 큰 단계는 `채팅 + 작업 로그 + 터미널 + 파일 트리` 중심의 session UX 완성입니다.
+- 현재는 `extensions/vibedeck-bridge` VSIX, extension local agent 자동 부트스트랩, shared thread history 영속화, 모바일 bootstrap 자동 세팅 v2(QR/deep link), mobile/cursor live session sync, 모바일 단일 shared session 셸, 터미널/파일 포커스 시트까지 갖춘 상태입니다. 다음 큰 단계는 live sync 정확도와 stalled recovery, Windows rough edge 마감입니다.
 
 ## 로컬 개발
 

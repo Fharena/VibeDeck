@@ -42,6 +42,31 @@ String _compactPath(String value, {int keep = 34}) {
   return '...${trimmed.substring(trimmed.length - keep)}';
 }
 
+String _firstNonEmptyText(Iterable<String> values, {String fallback = ''}) {
+  for (final value in values) {
+    final trimmed = value.trim();
+    if (trimmed.isNotEmpty) {
+      return trimmed;
+    }
+  }
+  return fallback;
+}
+
+List<String> _dedupeNonEmptyPaths(Iterable<String> values) {
+  final result = <String>[];
+  final seen = <String>{};
+
+  for (final value in values) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty || !seen.add(trimmed)) {
+      continue;
+    }
+    result.add(trimmed);
+  }
+
+  return result;
+}
+
 String _planStatusLabel(String value) {
   switch (value) {
     case 'completed':
@@ -231,6 +256,8 @@ class _PromptScreenState extends State<PromptScreen> {
               controller: widget.controller,
               onOpenReview: _showReviewSheet,
               onOpenStatus: _showStatusSheet,
+              onOpenTerminal: _showTerminalSheet,
+              onOpenFiles: _showFileSheet,
             ),
             const SizedBox(height: 14),
             _SectionCard(
@@ -320,6 +347,22 @@ class _PromptScreenState extends State<PromptScreen> {
       title: '세션 센터',
       subtitle: '연결, bootstrap, direct signaling 같은 운영 표면을 모아둡니다.',
       child: StatusScreen(controller: widget.controller),
+    );
+  }
+
+  Future<void> _showTerminalSheet() async {
+    await _showBottomSheet(
+      title: '터미널',
+      subtitle: '현재 세션에서 보고 있는 실행 상태와 최근 출력을 바로 확인합니다.',
+      child: _TerminalSheet(controller: widget.controller),
+    );
+  }
+
+  Future<void> _showFileSheet() async {
+    await _showBottomSheet(
+      title: '파일 포커스',
+      subtitle: '현재 세션의 focus, changed files, patch files를 한 번에 봅니다.',
+      child: _FileFocusSheet(controller: widget.controller),
     );
   }
 
@@ -575,11 +618,15 @@ class _WorkstreamCard extends StatelessWidget {
     required this.controller,
     required this.onOpenReview,
     required this.onOpenStatus,
+    required this.onOpenTerminal,
+    required this.onOpenFiles,
   });
 
   final AppController controller;
   final VoidCallback onOpenReview;
   final VoidCallback onOpenStatus;
+  final VoidCallback onOpenTerminal;
+  final VoidCallback onOpenFiles;
 
   @override
   Widget build(BuildContext context) {
@@ -865,8 +912,363 @@ class _WorkstreamCard extends StatelessWidget {
               ),
             ],
           ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton.tonalIcon(
+                  onPressed: onOpenTerminal,
+                  style: FilledButton.styleFrom(
+                    foregroundColor: const Color(0xFF10161D),
+                    backgroundColor: const Color(0xFFE4B15A),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  icon: const Icon(Icons.terminal_rounded),
+                  label: const Text('터미널 보기'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: onOpenFiles,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFFDCE6F2),
+                    side: const BorderSide(color: Color(0xFF32404D)),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  icon: const Icon(Icons.account_tree_outlined),
+                  label: const Text('파일 보기'),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
+    );
+  }
+}
+
+class _TerminalSheet extends StatelessWidget {
+  const _TerminalSheet({required this.controller});
+
+  final AppController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final terminal = controller.liveSession.terminal;
+    final status = _firstNonEmptyText([terminal.status, controller.runStatus],
+        fallback: '대기 중');
+    final profile = _firstNonEmptyText([
+      terminal.label,
+      terminal.profileId,
+      controller.sessionOperation.runLabel,
+      controller.sessionOperation.runProfileId,
+    ]);
+    final command = _firstNonEmptyText([
+      terminal.command,
+      controller.sessionOperation.runCommand,
+    ]);
+    final summary = _firstNonEmptyText([
+      terminal.summary,
+      controller.runSummary,
+    ], fallback: '최근 실행 결과가 아직 없습니다.');
+    final output = _firstNonEmptyText([
+      terminal.output,
+      terminal.excerpt,
+      controller.runOutput,
+      controller.runExcerpt,
+    ]);
+    final recentFiles = _dedupeNonEmptyPaths([
+      ...controller.runChangedFiles,
+      ...controller.currentJobFiles,
+    ]);
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _MetricPill(
+              icon: Icons.play_circle_outline,
+              label: status,
+              tone: status == 'success'
+                  ? const Color(0xFF2E9D78)
+                  : const Color(0xFFE4B15A),
+            ),
+            if (profile.isNotEmpty)
+              _MetricPill(
+                icon: Icons.terminal_rounded,
+                label: profile,
+                tone: const Color(0xFF4E8DFF),
+              ),
+            if (recentFiles.isNotEmpty)
+              _MetricPill(
+                icon: Icons.insert_drive_file_outlined,
+                label: '변경 파일 ${recentFiles.length}',
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _StreamSurface(
+          label: '실행 요약',
+          child: Text(
+            summary,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: const Color(0xFFDCE6F2),
+                  height: 1.45,
+                ),
+          ),
+        ),
+        if (command.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _StreamSurface(
+            label: '실행 명령',
+            child: SelectableText(
+              command,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: const Color(0xFFDCE6F2),
+                    fontFamily: 'monospace',
+                    height: 1.45,
+                  ),
+            ),
+          ),
+        ],
+        const SizedBox(height: 12),
+        _StreamSurface(
+          label: '최근 출력',
+          child: output.isEmpty
+              ? Text(
+                  '아직 터미널 출력이 없습니다. 실행 프로파일을 돌리면 최근 출력이 여기에 표시됩니다.',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: const Color(0xFFB7C4D2),
+                        height: 1.45,
+                      ),
+                )
+              : Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF091017),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFF202A35)),
+                  ),
+                  padding: const EdgeInsets.all(12),
+                  child: SelectableText(
+                    output,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: const Color(0xFFEAF1F8),
+                          fontFamily: 'monospace',
+                          height: 1.4,
+                        ),
+                  ),
+                ),
+        ),
+        if (controller.topErrors.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _SheetListBlock(
+            label: '상위 에러',
+            icon: Icons.error_outline,
+            items: controller.topErrors.take(6).toList(),
+            emptyMessage: '표시할 에러가 없습니다.',
+          ),
+        ],
+        if (recentFiles.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _SheetListBlock(
+            label: '최근 변경 파일',
+            icon: Icons.insert_drive_file_outlined,
+            items: recentFiles.take(8).toList(),
+            emptyMessage: '최근 변경 파일이 없습니다.',
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _FileFocusSheet extends StatelessWidget {
+  const _FileFocusSheet({required this.controller});
+
+  final AppController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final workspace = controller.liveSession.workspace;
+    final focus = controller.liveSession.focus;
+    final rootPath = _firstNonEmptyText([
+      workspace.rootPath,
+      controller.adapterRuntime.workspaceRoot,
+    ]);
+    final focusPaths = _dedupeNonEmptyPaths([
+      focus.activeFilePath,
+      workspace.activeFilePath,
+      focus.patchPath,
+      focus.runErrorPath,
+    ]);
+    final changedFiles = _dedupeNonEmptyPaths([
+      ...workspace.changedFiles,
+      ...controller.runChangedFiles,
+      ...controller.currentJobFiles,
+    ]);
+    final patchFiles = _dedupeNonEmptyPaths([
+      ...workspace.patchFiles,
+      ...controller.patchFiles.map((file) => file.path),
+    ]);
+    final selection = focus.selection.trim();
+    final runError = focus.runErrorPath.trim().isEmpty
+        ? ''
+        : focus.runErrorLine > 0
+            ? '${focus.runErrorPath.trim()}:${focus.runErrorLine}'
+            : focus.runErrorPath.trim();
+    final hasData = rootPath.isNotEmpty ||
+        focusPaths.isNotEmpty ||
+        changedFiles.isNotEmpty ||
+        patchFiles.isNotEmpty ||
+        selection.isNotEmpty ||
+        runError.isNotEmpty;
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            if (rootPath.isNotEmpty)
+              _MetricChip(
+                  label: '워크스페이스', value: _compactPath(rootPath, keep: 30)),
+            if (focusPaths.isNotEmpty)
+              _MetricChip(label: '포커스 수', value: '${focusPaths.length}개'),
+            if (changedFiles.isNotEmpty)
+              _MetricChip(label: '변경 파일', value: '${changedFiles.length}개'),
+            if (patchFiles.isNotEmpty)
+              _MetricChip(label: '패치 파일', value: '${patchFiles.length}개'),
+          ],
+        ),
+        if (hasData) ...[
+          if (focusPaths.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _SheetListBlock(
+              label: '현재 포커스',
+              icon: Icons.my_location_outlined,
+              items: focusPaths,
+              emptyMessage: '현재 포커스 정보가 아직 없습니다.',
+            ),
+          ],
+          if (selection.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _StreamSurface(
+              label: '선택 영역',
+              child: SelectableText(
+                selection,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: const Color(0xFFDCE6F2),
+                      fontFamily: 'monospace',
+                      height: 1.4,
+                    ),
+              ),
+            ),
+          ],
+          if (changedFiles.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _SheetListBlock(
+              label: '변경 파일',
+              icon: Icons.edit_note_outlined,
+              items: changedFiles.take(12).toList(),
+              emptyMessage: '변경 파일이 아직 없습니다.',
+            ),
+          ],
+          if (patchFiles.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _SheetListBlock(
+              label: '패치 파일',
+              icon: Icons.rule_folder_outlined,
+              items: patchFiles.take(12).toList(),
+              emptyMessage: '패치 파일이 아직 없습니다.',
+            ),
+          ],
+          if (runError.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _SheetListBlock(
+              label: '최근 에러 위치',
+              icon: Icons.error_outline,
+              items: [runError],
+              emptyMessage: '최근 에러 위치가 없습니다.',
+            ),
+          ],
+        ] else ...[
+          const SizedBox(height: 12),
+          _StreamSurface(
+            label: '현재 상태',
+            child: Text(
+              '아직 파일 포커스 정보가 없습니다. 패치나 실행이 생기면 현재 파일, 변경 파일, 에러 위치를 이 시트에서 바로 확인할 수 있습니다.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: const Color(0xFFB7C4D2),
+                    height: 1.45,
+                  ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _SheetListBlock extends StatelessWidget {
+  const _SheetListBlock({
+    required this.label,
+    required this.icon,
+    required this.items,
+    required this.emptyMessage,
+  });
+
+  final String label;
+  final IconData icon;
+  final List<String> items;
+  final String emptyMessage;
+
+  @override
+  Widget build(BuildContext context) {
+    return _StreamSurface(
+      label: label,
+      child: items.isEmpty
+          ? Text(
+              emptyMessage,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: const Color(0xFFB7C4D2),
+                    height: 1.45,
+                  ),
+            )
+          : Column(
+              children: [
+                for (var index = 0; index < items.length; index++)
+                  Padding(
+                    padding: EdgeInsets.only(
+                      bottom: index == items.length - 1 ? 0 : 10,
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(icon, size: 18, color: const Color(0xFF8FA0B3)),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: SelectableText(
+                            items[index],
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(
+                                  color: const Color(0xFFDCE6F2),
+                                  height: 1.4,
+                                ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
     );
   }
 }

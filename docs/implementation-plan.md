@@ -167,27 +167,29 @@
   - 동기화 상태는 유지하되 workstream surface 안으로 압축
   - 패치와 실행, 세션 센터는 보조 액션으로 유지하고 비핵심 카드 노출을 축소
   - 검증: flutter analyze 통과, 안전 경로 기준 flutter test test/app_smoke_test.dart 통과
+- 2026-03-15 / 모바일 터미널·파일 표면 polish
+  - workstream 카드에서 터미널 보기, 파일 보기 액션을 열어 bottom sheet로 세션 세부 표면을 노출
+  - 터미널 시트에 실행 요약, 실행 명령, 최근 출력, 상위 에러, 최근 변경 파일을 연결
+  - 파일 포커스 시트에 현재 포커스, 변경 파일, 패치 파일, 최근 에러 위치를 연결
+  - 검증: flutter analyze 통과, 안전 경로 기준 flutter test test/app_smoke_test.dart 통과
 
 ## 다음 작업 우선순위
 
 1. Session UX foundation
-   - reasoning summary / plan trace / tool activity schema 추가
-   - terminal live state 및 event schema 정의
-   - workspace tree/focus state 모델 정의
+   - reasoning summary / plan trace / tool activity schema를 live sync 품질 기준으로 정교화
+   - terminal live state 및 event schema를 IDE/mobile 양쪽에서 동일하게 다듬기
+   - workspace tree/focus state 모델을 terminal/file surface 이후 단계까지 확장
 2. Cursor panel redesign
    - panel을 `채팅 + 작업 로그 + 터미널 + 파일 트리` 중심 레이아웃으로 개편
    - 현재 thread viewer 성격을 shared session workspace surface로 승격
-3. 모바일 dark session shell polish
-   - Cursor 계열 dark mode 전환
-   - 기본 화면에서 bootstrap/ACK/direct signaling 카드 제거
-   - terminal drawer + file tree sheet 추가
-4. live terminal/file focus sync
+3. live terminal/file focus sync
    - Cursor와 모바일이 같은 terminal tail / focused file / changed files를 공유
-5. Cursor 세션 복원/로그 가시성 + stalled recovery
-6. Windows smoke cleanup/agent 잠금 이슈 정리
-7. control timeout budget 운영 설정 외부화
-8. 설치 산출물 버전 관리/릴리스 자동화
-9. Cursor 외 provider(Codex/Claude Code/Antigravity) 확장용 adapter mode 정리
+   - 작업 전환 시 focus/selection/error pointer가 양쪽에서 같은 타이밍으로 보이게 정리
+4. Cursor 세션 복원/로그 가시성 + stalled recovery
+5. Windows smoke cleanup/agent 잠금 이슈 정리
+6. control timeout budget 운영 설정 외부화
+7. 설치 산출물 버전 관리/릴리스 자동화
+8. Cursor 외 provider(Codex/Claude Code/Antigravity) 확장용 adapter mode 정리
 
 주의:
 - provider 확장은 Cursor 기반 unified session 흐름이 충분히 완성된 뒤에 진행한다.

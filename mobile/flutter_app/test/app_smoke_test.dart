@@ -1,4 +1,4 @@
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vibedeck_mobile/app.dart';
 import 'package:vibedeck_mobile/services/agent_api.dart';
@@ -6,6 +6,9 @@ import 'package:vibedeck_mobile/state/app_controller.dart';
 
 void main() {
   testWidgets('shows streamlined session shell labels', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
     final controller = AppController(api: _FakeShellAgentApi());
     addTearDown(controller.dispose);
 
@@ -23,6 +26,28 @@ void main() {
     expect(find.text('지금 진행 중'), findsOneWidget);
     expect(find.text('패치와 실행'), findsOneWidget);
     expect(find.text('세션 센터'), findsOneWidget);
+    expect(find.text('터미널 보기'), findsOneWidget);
+    expect(find.text('파일 보기'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('터미널 보기'));
+    await tester.tap(find.text('터미널 보기'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('터미널'), findsOneWidget);
+    expect(find.text('최근 출력'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.close));
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('파일 보기'));
+    await tester.tap(find.text('파일 보기'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('파일 포커스'), findsOneWidget);
+    expect(find.text('현재 상태'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.close));
+    await tester.pumpAndSettle();
 
     await tester.drag(find.byType(Scrollable).first, const Offset(0, -700));
     await tester.pumpAndSettle();
