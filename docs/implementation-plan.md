@@ -160,6 +160,14 @@
 - 모바일 bootstrap 자동 세팅 v1 (`GET /v1/agent/bootstrap`, agent/signaling/workspace/current thread/recent threads 자동 조회, 최근 host 기억)
 - 모바일 bootstrap 자동 세팅 v2 (extension QR/deep link, `vibedeck://bootstrap` 수신, agent/signaling/thread 자동 적용)
 
+## 최근 체크포인트
+
+- 2026-03-15 / 모바일 메인 셸 정리
+  - 모바일 기본 화면을 공유 세션 hero -> 요청 작성 -> 지금 진행 중 -> 작업 로그 흐름으로 재구성
+  - 동기화 상태는 유지하되 workstream surface 안으로 압축
+  - 패치와 실행, 세션 센터는 보조 액션으로 유지하고 비핵심 카드 노출을 축소
+  - 검증: flutter analyze 통과, 안전 경로 기준 flutter test test/app_smoke_test.dart 통과
+
 ## 다음 작업 우선순위
 
 1. Session UX foundation

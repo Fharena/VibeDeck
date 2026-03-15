@@ -1,10 +1,11 @@
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vibedeck_mobile/app.dart';
 import 'package:vibedeck_mobile/services/agent_api.dart';
 import 'package:vibedeck_mobile/state/app_controller.dart';
 
 void main() {
-  testWidgets('shows unified session shell labels', (tester) async {
+  testWidgets('shows streamlined session shell labels', (tester) async {
     final controller = AppController(api: _FakeShellAgentApi());
     addTearDown(controller.dispose);
 
@@ -12,12 +13,21 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('VibeDeck Mobile'), findsOneWidget);
-    expect(find.text('공유 세션'), findsOneWidget);
-    expect(find.text('세션 개요'), findsOneWidget);
-    expect(find.text('패치와 실행'), findsWidgets);
+    expect(find.text('공유 세션'), findsWidgets);
+    expect(find.text('세션에 요청'), findsOneWidget);
+    expect(find.text('세션에 보내기'), findsOneWidget);
+
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, -700));
+    await tester.pumpAndSettle();
+
+    expect(find.text('지금 진행 중'), findsOneWidget);
+    expect(find.text('패치와 실행'), findsOneWidget);
     expect(find.text('세션 센터'), findsOneWidget);
-    expect(find.text('동기화 상태'), findsOneWidget);
-    expect(find.text('다시 연결'), findsOneWidget);
+
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, -700));
+    await tester.pumpAndSettle();
+
+    expect(find.text('작업 로그'), findsWidgets);
   });
 }
 

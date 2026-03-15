@@ -80,15 +80,13 @@ class _MobileShellState extends State<MobileShell> {
   late final BootstrapLinkSource _bootstrapLinkSource;
   StreamSubscription<Uri>? _bootstrapLinkSub;
 
-
   @override
   void initState() {
     super.initState();
-    _controller =
-        widget.controller ?? AppController(settingsStore: FileAppSettingsStore());
+    _controller = widget.controller ??
+        AppController(settingsStore: FileAppSettingsStore());
     _ownsController = widget.controller == null;
-    _bootstrapLinkSource =
-        widget.bootstrapLinkSource ??
+    _bootstrapLinkSource = widget.bootstrapLinkSource ??
         (_ownsController
             ? AppLinksBootstrapLinkSource()
             : const NoopBootstrapLinkSource());
@@ -122,42 +120,51 @@ class _MobileShellState extends State<MobileShell> {
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, _) {
-        final colors = Theme.of(context).colorScheme;
-
         return Scaffold(
           body: Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [Color(0xFFF6FBF9), Color(0xFFEFF4FF)],
+                colors: [
+                  Color(0xFF081018),
+                  Color(0xFF0D141C),
+                  Color(0xFF111A23)
+                ],
               ),
             ),
             child: SafeArea(
               child: Column(
                 children: [
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+                    padding: const EdgeInsets.fromLTRB(20, 18, 20, 10),
                     child: Row(
                       children: [
                         Container(
-                          width: 40,
-                          height: 40,
+                          width: 44,
+                          height: 44,
                           decoration: BoxDecoration(
-                            color: const Color(0xFF1F8C77),
-                            borderRadius: BorderRadius.circular(12),
+                            color: const Color(0xFFE4B15A),
+                            borderRadius: BorderRadius.circular(14),
+                            boxShadow: const [
+                              BoxShadow(
+                                color: Color(0x33291900),
+                                blurRadius: 18,
+                                offset: Offset(0, 8),
+                              ),
+                            ],
                           ),
                           child: _controller.isLoading
                               ? const Padding(
                                   padding: EdgeInsets.all(10),
                                   child: CircularProgressIndicator(
                                     strokeWidth: 2,
-                                    color: Colors.white,
+                                    color: Color(0xFF10161D),
                                   ),
                                 )
                               : const Icon(
                                   Icons.auto_awesome,
-                                  color: Colors.white,
+                                  color: Color(0xFF10161D),
                                 ),
                         ),
                         const SizedBox(width: 12),
@@ -167,16 +174,22 @@ class _MobileShellState extends State<MobileShell> {
                             children: [
                               Text(
                                 'VibeDeck Mobile',
-                                style: Theme.of(context).textTheme.titleLarge,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleLarge
+                                    ?.copyWith(
+                                      color: const Color(0xFFF4F7FB),
+                                    ),
                               ),
+                              const SizedBox(height: 2),
                               Text(
-                                '공유 세션 · ${_controller.currentSessionPhase} · ${_controller.connectionState}',
+                                '공유 세션을 모바일에서 이어가는 컨트롤 레이어',
                                 style: Theme.of(context)
                                     .textTheme
                                     .bodyMedium
                                     ?.copyWith(
-                                      color: colors.primary,
-                                      fontWeight: FontWeight.w600,
+                                      color: const Color(0xFF93A4B7),
+                                      fontWeight: FontWeight.w500,
                                     ),
                               ),
                             ],

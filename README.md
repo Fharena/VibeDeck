@@ -68,6 +68,7 @@ docs/
 - 모바일 상태 화면이 `GET /v1/agent/bootstrap`로 agent/signaling/workspace/current thread/recent threads를 자동 조회해 기본 연결값을 채움
 - Cursor extension이 `VibeDeck: Open Mobile Bootstrap` / `VibeDeck: Copy Mobile Bootstrap Link`로 LAN 기준 QR/deep link(`vibedeck://bootstrap`)를 제공
 - 모바일 앱이 deep link를 수신하면 agent/signaling/thread를 즉시 적용하고, 최근 연결 host도 함께 기억함
+- 모바일 메인 셸이 Cursor 계열 dark session feed로 정리되어 요청 작성, 작업 로그, 패치/실행 요약, 세션 복구 상태를 한 화면 흐름으로 확인 가능
 
 ## 세팅 방향
 

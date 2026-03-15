@@ -4,6 +4,59 @@ import '../state/app_controller.dart';
 import 'review_screen.dart';
 import 'status_screen.dart';
 
+Color _syncTone(BuildContext context, SessionSyncStatus status) {
+  switch (status) {
+    case SessionSyncStatus.live:
+      return const Color(0xFF2E9D78);
+    case SessionSyncStatus.stale:
+      return const Color(0xFFD28A32);
+    case SessionSyncStatus.reconnecting:
+      return const Color(0xFF4E8DFF);
+    case SessionSyncStatus.failed:
+      return Theme.of(context).colorScheme.error;
+    case SessionSyncStatus.idle:
+      return const Color(0xFF8B9AAF);
+  }
+}
+
+IconData _syncIcon(SessionSyncStatus status) {
+  switch (status) {
+    case SessionSyncStatus.live:
+      return Icons.cloud_done_outlined;
+    case SessionSyncStatus.stale:
+      return Icons.schedule_outlined;
+    case SessionSyncStatus.reconnecting:
+      return Icons.autorenew_rounded;
+    case SessionSyncStatus.failed:
+      return Icons.sync_problem_outlined;
+    case SessionSyncStatus.idle:
+      return Icons.link_outlined;
+  }
+}
+
+String _compactPath(String value, {int keep = 34}) {
+  final trimmed = value.trim();
+  if (trimmed.length <= keep) {
+    return trimmed;
+  }
+  return '...${trimmed.substring(trimmed.length - keep)}';
+}
+
+String _planStatusLabel(String value) {
+  switch (value) {
+    case 'completed':
+      return '완료';
+    case 'in_progress':
+      return '진행 중';
+    case 'blocked':
+      return '막힘';
+    case 'pending':
+      return '대기';
+    default:
+      return value.isEmpty ? '-' : value;
+  }
+}
+
 class PromptScreen extends StatefulWidget {
   const PromptScreen({
     super.key,
@@ -41,148 +94,131 @@ class _PromptScreenState extends State<PromptScreen> {
     return AnimatedBuilder(
       animation: widget.controller,
       builder: (context, _) {
-        final colors = Theme.of(context).colorScheme;
         _syncPromptDraft();
 
         return ListView(
           key: const ValueKey('session-screen'),
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          padding: const EdgeInsets.fromLTRB(16, 6, 16, 20),
           children: [
+            _SessionHeroCard(
+              controller: widget.controller,
+              onNewThread: _handleNewThread,
+              onSelectThread: (threadId) async {
+                await widget.controller.selectThread(threadId);
+              },
+            ),
+            const SizedBox(height: 14),
             _SectionCard(
-              title: '세션 개요',
-              subtitle: '모바일과 Cursor가 하나의 세션처럼 같은 흐름을 공유합니다.',
+              title: '세션에 요청',
+              subtitle: '채팅 입력과 공유 draft를 한 카드에 모아 세션 흐름을 끊지 않습니다.',
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (widget.controller.liveDraftPreview.isNotEmpty ||
+                      widget.controller.promptDraft.isNotEmpty) ...[
+                    _StreamSurface(
+                      label: '공유 draft',
+                      child: Text(
+                        widget.controller.liveDraftPreview.isNotEmpty
+                            ? widget.controller.liveDraftPreview
+                            : widget.controller.promptDraft,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: const Color(0xFFDCE6F2),
+                              height: 1.45,
+                            ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  TextField(
+                    controller: _promptController,
+                    focusNode: _promptFocusNode,
+                    minLines: 5,
+                    maxLines: 8,
+                    style: const TextStyle(
+                      color: Color(0xFFEAF1F8),
+                      height: 1.45,
+                    ),
+                    onChanged: widget.controller.updatePromptDraft,
+                    decoration: InputDecoration(
+                      hintText: '예: 로그인 실패 원인을 먼저 좁히고, 변경 파일을 최소화한 패치를 제안해줘.',
+                      hintStyle: const TextStyle(color: Color(0xFF7D8EA2)),
+                      filled: true,
+                      fillColor: const Color(0xFF0E151C),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(18),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.all(16),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    '컨텍스트',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          color: const Color(0xFFF4F7FB),
+                        ),
+                  ),
+                  const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
                     children: [
-                      _MetricChip(
-                        label: '현재 세션',
-                        value: widget.controller.currentThreadTitle,
+                      _ContextChip(
+                        label: '활성 파일',
+                        value: _context['activeFile']!,
+                        onChanged: (value) =>
+                            setState(() => _context['activeFile'] = value),
                       ),
-                      _MetricChip(
-                        label: '현재 Job',
-                        value: widget.controller.currentJobId ?? '-',
+                      _ContextChip(
+                        label: '선택 영역',
+                        value: _context['selection']!,
+                        onChanged: (value) =>
+                            setState(() => _context['selection'] = value),
                       ),
-                      _MetricChip(
-                        label: '작업 디렉토리',
-                        value: widget
-                                .controller.adapterRuntime.workspaceRoot.isEmpty
-                            ? '-'
-                            : widget.controller.adapterRuntime.workspaceRoot,
+                      _ContextChip(
+                        label: '최근 오류',
+                        value: _context['latestError']!,
+                        onChanged: (value) =>
+                            setState(() => _context['latestError'] = value),
                       ),
-                      _MetricChip(
-                        label: '세션 단계',
-                        value: widget.controller.currentThreadState,
-                      ),
-                      _MetricChip(
-                        label: '실행 프로파일',
-                        value: '${widget.controller.runProfiles.length}',
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: FilledButton.tonalIcon(
-                          onPressed: () {
-                            widget.controller.beginNewThread();
-                            _promptController.clear();
-                            widget.controller.updatePromptDraft('');
-                          },
-                          icon: const Icon(Icons.add_comment_outlined),
-                          label: const Text('새 세션'),
+                      _ContextChip(
+                        label: '워크스페이스 요약',
+                        value: _context['workspaceSummary']!,
+                        onChanged: (value) => setState(
+                          () => _context['workspaceSummary'] = value,
                         ),
                       ),
                     ],
                   ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            _SectionCard(
-              title: '최근 세션',
-              subtitle: '기존 세션을 선택하면 같은 흐름을 이어서 진행합니다.',
-              child: widget.controller.threads.isEmpty
-                  ? const Text('아직 생성된 세션이 없습니다.')
-                  : Column(
-                      children: widget.controller.threads
-                          .take(6)
-                          .map(
-                            (thread) => _ThreadTile(
-                              thread: thread,
-                              selected: thread.id ==
-                                  widget.controller.currentThreadId,
-                              onTap: () async {
-                                await widget.controller.selectThread(thread.id);
-                              },
-                            ),
-                          )
-                          .toList(),
-                    ),
-            ),
-            const SizedBox(height: 12),
-            _SectionCard(
-              title: '패치와 실행',
-              subtitle: '검토와 세션 제어를 같은 화면 흐름에서 바로 이어갑니다.',
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      _MetricChip(
-                        label: '현재 Job',
-                        value: widget.controller.currentJobId ?? '-',
-                      ),
-                      _MetricChip(
-                        label: '패치 파일',
-                        value: '${widget.controller.patchFiles.length}',
-                      ),
-                      _MetricChip(
-                        label: '실행 프로파일',
-                        value: '${widget.controller.runProfiles.length}',
-                      ),
-                      _MetricChip(
-                        label: 'Control Path',
-                        value: widget.controller.controlPath,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    widget.controller.patchSummary.isNotEmpty
-                        ? widget.controller.patchSummary
-                        : widget.controller.patchAvailabilityReason,
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  if (widget.controller.runSummary.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      '최근 실행: ${widget.controller.runStatus.isEmpty ? '-' : widget.controller.runStatus} / ${widget.controller.runSummary}',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 14),
                   Row(
                     children: [
                       Expanded(
-                        child: FilledButton.tonalIcon(
-                          onPressed: () => _showReviewSheet(),
-                          icon: const Icon(Icons.rule_folder_outlined),
-                          label: const Text('패치와 실행'),
+                        child: ElevatedButton.icon(
+                          icon: const Icon(Icons.send_rounded),
+                          label: const Text('세션에 보내기'),
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            backgroundColor: const Color(0xFFE4B15A),
+                            foregroundColor: const Color(0xFF10161D),
+                          ),
+                          onPressed: widget.controller.isLoading
+                              ? null
+                              : _submitPrompt,
                         ),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: OutlinedButton.icon(
-                          onPressed: () => _showStatusSheet(),
-                          icon: const Icon(Icons.tune),
-                          label: const Text('세션 센터'),
+                          icon: const Icon(Icons.restart_alt),
+                          label: const Text('입력 지우기'),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            foregroundColor: const Color(0xFFDCE6F2),
+                            side: const BorderSide(color: Color(0xFF32404D)),
+                          ),
+                          onPressed: _clearPrompt,
                         ),
                       ),
                     ],
@@ -190,226 +226,65 @@ class _PromptScreenState extends State<PromptScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 12),
-            _SectionCard(
-              title: '공유 상태',
-              subtitle: 'Cursor와 모바일의 참여자, 초안, 포커스를 같은 세션에서 공유합니다.',
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      _MetricChip(
-                        label: '세션 단계',
-                        value: widget.controller.currentSessionPhase,
-                      ),
-                      _MetricChip(
-                        label: '참여자',
-                        value: widget.controller.liveParticipantSummary,
-                      ),
-                      _MetricChip(
-                        label: '활동',
-                        value: widget.controller.liveComposerTyping
-                            ? '작성 중'
-                            : '대기',
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    widget.controller.liveActivitySummary,
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '포커스: ${widget.controller.liveFocusSummary}',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                  if (widget.controller.liveDraftPreview.isNotEmpty) ...[
-                    const SizedBox(height: 10),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF5FBF8),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: colors.outlineVariant),
-                      ),
-                      child: Text(
-                        widget.controller.liveDraftPreview,
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
+            const SizedBox(height: 14),
+            _WorkstreamCard(
+              controller: widget.controller,
+              onOpenReview: _showReviewSheet,
+              onOpenStatus: _showStatusSheet,
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             _SectionCard(
-              title: '동기화 상태',
-              subtitle: '절전이나 네트워크 흔들림 이후에도 연결 상태와 복구 단계를 바로 보여줍니다.',
-              child: _SessionSyncPanel(controller: widget.controller),
-            ),
-            const SizedBox(height: 12),
-            _SectionCard(
-              title: '세션 피드',
-              subtitle: '프롬프트, 패치, 실행 결과가 하나의 흐름으로 누적됩니다.',
+              title: '작업 로그',
+              subtitle: '프롬프트, 패치, 실행 결과를 시간순으로 이어서 읽는 메인 피드입니다.',
               child: widget.controller.threadEvents.isEmpty
-                  ? const Text('세션 이벤트가 없습니다. 프롬프트를 먼저 보내보세요.')
+                  ? Text(
+                      '아직 세션 이벤트가 없습니다. 위 입력창에서 첫 요청을 보내면 여기로 흐름이 쌓입니다.',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: const Color(0xFF9FB0C0),
+                            height: 1.45,
+                          ),
+                    )
                   : Column(
                       children: widget.controller.threadEvents
                           .map((event) => _ThreadEventTile(event: event))
                           .toList(),
                     ),
             ),
-            const SizedBox(height: 12),
-            _SectionCard(
-              title: '요청 작성',
-              subtitle: '템플릿 대신 자연어로 목적과 제약사항을 구체적으로 적습니다.',
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  TextField(
-                    controller: _promptController,
-                    focusNode: _promptFocusNode,
-                    minLines: 4,
-                    maxLines: 7,
-                    onChanged: widget.controller.updatePromptDraft,
-                    decoration: InputDecoration(
-                      hintText: '예: src/hello.py 파일을 만들고 hello world만 출력하게 해줘.',
-                      filled: true,
-                      fillColor: Colors.white,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text('컨텍스트', style: Theme.of(context).textTheme.bodyMedium),
-                  const SizedBox(height: 8),
-                  _ContextTile(
-                    label: '활성 파일',
-                    value: _context['activeFile']!,
-                    onChanged: (value) =>
-                        setState(() => _context['activeFile'] = value),
-                  ),
-                  _ContextTile(
-                    label: '선택 영역',
-                    value: _context['selection']!,
-                    onChanged: (value) =>
-                        setState(() => _context['selection'] = value),
-                  ),
-                  _ContextTile(
-                    label: '최근 오류',
-                    value: _context['latestError']!,
-                    onChanged: (value) =>
-                        setState(() => _context['latestError'] = value),
-                  ),
-                  _ContextTile(
-                    label: '워크스페이스 요약',
-                    value: _context['workspaceSummary']!,
-                    onChanged: (value) => setState(
-                      () => _context['workspaceSummary'] = value,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    icon: const Icon(Icons.send_rounded),
-                    label: const Text('세션에 보내기'),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      backgroundColor: const Color(0xFF1F8C77),
-                      foregroundColor: Colors.white,
-                    ),
-                    onPressed: widget.controller.isLoading
-                        ? null
-                        : () async {
-                            final messenger = ScaffoldMessenger.of(context);
-                            await widget.controller.submitPrompt(
-                              prompt: _promptController.text,
-                              context: _context,
-                            );
-
-                            if (!mounted) {
-                              return;
-                            }
-
-                            final error = widget.controller.errorMessage;
-                            if (error == null) {
-                              _promptController.clear();
-                              widget.controller.updatePromptDraft('');
-                            }
-                            messenger.showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  error ?? 'PROMPT_SUBMIT 완료',
-                                ),
-                              ),
-                            );
-                          },
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    icon: const Icon(Icons.restart_alt),
-                    label: const Text('입력 지우기'),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                    onPressed: () {
-                      _promptController.clear();
-                      widget.controller.updatePromptDraft('');
-                    },
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Container(
-              decoration: BoxDecoration(
-                color: colors.surface,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: colors.outlineVariant),
-              ),
-              padding: const EdgeInsets.all(14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('공유 draft',
-                      style: Theme.of(context).textTheme.titleMedium),
-                  const SizedBox(height: 8),
-                  Text(
-                    widget.controller.liveDraftPreview.isNotEmpty
-                        ? widget.controller.liveDraftPreview
-                        : (widget.controller.promptDraft.isEmpty
-                            ? '아직 공유된 draft가 없습니다.'
-                            : widget.controller.promptDraft),
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                ],
-              ),
-            ),
-            if (widget.controller.errorMessage != null) ...[
-              const SizedBox(height: 12),
-              Text(
-                widget.controller.errorMessage!,
-                style:
-                    TextStyle(color: colors.error, fontWeight: FontWeight.w700),
-              ),
-            ],
           ],
         );
       },
+    );
+  }
+
+  void _handleNewThread() {
+    widget.controller.beginNewThread();
+    _clearPrompt();
+  }
+
+  void _clearPrompt() {
+    _promptController.clear();
+    widget.controller.updatePromptDraft('');
+  }
+
+  Future<void> _submitPrompt() async {
+    final messenger = ScaffoldMessenger.of(context);
+    await widget.controller.submitPrompt(
+      prompt: _promptController.text,
+      context: _context,
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    final error = widget.controller.errorMessage;
+    if (error == null) {
+      _clearPrompt();
+    }
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(error ?? 'PROMPT_SUBMIT 완료'),
+      ),
     );
   }
 
@@ -435,7 +310,7 @@ class _PromptScreenState extends State<PromptScreen> {
   Future<void> _showReviewSheet() async {
     await _showBottomSheet(
       title: '패치와 실행',
-      subtitle: '세션 안에서 검토와 실행 결과를 이어서 확인합니다.',
+      subtitle: '검토와 실행 결과를 세션 흐름과 붙여서 확인합니다.',
       child: ReviewScreen(controller: widget.controller),
     );
   }
@@ -443,7 +318,7 @@ class _PromptScreenState extends State<PromptScreen> {
   Future<void> _showStatusSheet() async {
     await _showBottomSheet(
       title: '세션 센터',
-      subtitle: '연결, bootstrap, direct signaling 상세 제어',
+      subtitle: '연결, bootstrap, direct signaling 같은 운영 표면을 모아둡니다.',
       child: StatusScreen(controller: widget.controller),
     );
   }
@@ -463,7 +338,7 @@ class _PromptScreenState extends State<PromptScreen> {
             heightFactor: 0.94,
             child: Container(
               decoration: const BoxDecoration(
-                color: Color(0xFFF8FBFA),
+                color: Color(0xFF0F161D),
                 borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
               ),
               child: Column(
@@ -473,7 +348,7 @@ class _PromptScreenState extends State<PromptScreen> {
                     width: 52,
                     height: 5,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFD6E9E3),
+                      color: const Color(0xFF2C3844),
                       borderRadius: BorderRadius.circular(999),
                     ),
                   ),
@@ -487,24 +362,35 @@ class _PromptScreenState extends State<PromptScreen> {
                             children: [
                               Text(
                                 title,
-                                style: Theme.of(context).textTheme.titleLarge,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleLarge
+                                    ?.copyWith(
+                                      color: const Color(0xFFF4F7FB),
+                                    ),
                               ),
                               const SizedBox(height: 4),
                               Text(
                                 subtitle,
-                                style: Theme.of(context).textTheme.bodySmall,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(
+                                      color: const Color(0xFF93A4B7),
+                                    ),
                               ),
                             ],
                           ),
                         ),
                         IconButton(
                           onPressed: () => Navigator.of(context).pop(),
+                          color: const Color(0xFFDCE6F2),
                           icon: const Icon(Icons.close),
                         ),
                       ],
                     ),
                   ),
-                  const Divider(height: 1),
+                  const Divider(height: 1, color: Color(0xFF24303B)),
                   Expanded(child: child),
                 ],
               ),
@@ -516,116 +402,573 @@ class _PromptScreenState extends State<PromptScreen> {
   }
 }
 
-class _SessionSyncPanel extends StatelessWidget {
-  const _SessionSyncPanel({required this.controller});
+class _SessionHeroCard extends StatelessWidget {
+  const _SessionHeroCard({
+    required this.controller,
+    required this.onNewThread,
+    required this.onSelectThread,
+  });
+
+  final AppController controller;
+  final VoidCallback onNewThread;
+  final ValueChanged<String> onSelectThread;
+
+  @override
+  Widget build(BuildContext context) {
+    final syncTone = _syncTone(context, controller.sessionSyncStatus);
+    final activeThreads = controller.threads.take(4).toList();
+
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF141F29), Color(0xFF0E161D)],
+        ),
+        border: Border.all(color: const Color(0xFF27333F)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x22000000),
+            blurRadius: 18,
+            offset: Offset(0, 10),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '공유 세션',
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                            color: const Color(0xFFE4B15A),
+                            letterSpacing: 0.8,
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      controller.currentThreadTitle,
+                      style:
+                          Theme.of(context).textTheme.headlineMedium?.copyWith(
+                                color: const Color(0xFFF4F7FB),
+                                height: 1.1,
+                              ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '${controller.currentSessionPhase} · ${controller.connectionState}',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: const Color(0xFF96A7BA),
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+              TextButton.icon(
+                onPressed: onNewThread,
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFFDCE6F2),
+                ),
+                icon: const Icon(Icons.add_comment_outlined),
+                label: const Text('새 세션'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _MetricPill(
+                icon: _syncIcon(controller.sessionSyncStatus),
+                label: controller.sessionSyncStatusLabel,
+                tone: syncTone,
+              ),
+              _MetricPill(
+                icon: Icons.group_outlined,
+                label: controller.liveParticipantSummary,
+              ),
+              _MetricPill(
+                icon: Icons.route_outlined,
+                label: controller.controlPath,
+              ),
+              _MetricPill(
+                icon: Icons.rule_folder_outlined,
+                label: '패치 ${controller.patchFiles.length}개',
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _MetricChip(
+                label: '현재 Job',
+                value: controller.currentJobId ?? '-',
+              ),
+              _MetricChip(
+                label: '포커스',
+                value: _compactPath(controller.liveFocusSummary),
+              ),
+              _MetricChip(
+                label: '작업 디렉토리',
+                value: controller.adapterRuntime.workspaceRoot.isEmpty
+                    ? '-'
+                    : _compactPath(controller.adapterRuntime.workspaceRoot,
+                        keep: 28),
+              ),
+            ],
+          ),
+          if (activeThreads.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Text(
+              '최근 세션',
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: const Color(0xFFDCE6F2),
+                  ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: activeThreads
+                  .map(
+                    (thread) => ChoiceChip(
+                      label: Text(
+                        thread.title,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      selected: thread.id == controller.currentThreadId,
+                      onSelected: (_) => onSelectThread(thread.id),
+                      backgroundColor: const Color(0xFF111922),
+                      selectedColor: const Color(0xFF253445),
+                      side: const BorderSide(color: Color(0xFF2B3742)),
+                      labelStyle: TextStyle(
+                        color: thread.id == controller.currentThreadId
+                            ? const Color(0xFFF4F7FB)
+                            : const Color(0xFFB4C2CF),
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _WorkstreamCard extends StatelessWidget {
+  const _WorkstreamCard({
+    required this.controller,
+    required this.onOpenReview,
+    required this.onOpenStatus,
+  });
+
+  final AppController controller;
+  final VoidCallback onOpenReview;
+  final VoidCallback onOpenStatus;
+
+  @override
+  Widget build(BuildContext context) {
+    final reasoning = controller.liveSession.reasoning.summary.trim();
+    final planItems = controller.liveSession.plan.items.take(4).toList();
+    final toolActivities =
+        controller.liveSession.tools.activities.reversed.take(3).toList();
+    final terminal = controller.liveSession.terminal;
+    final workspace = controller.liveSession.workspace;
+    final fileHighlights = <String>{};
+
+    if (workspace.activeFilePath.trim().isNotEmpty) {
+      fileHighlights.add(workspace.activeFilePath.trim());
+    }
+    fileHighlights.addAll(
+      workspace.changedFiles.where((path) => path.trim().isNotEmpty).take(4),
+    );
+    if (fileHighlights.isEmpty) {
+      fileHighlights.addAll(
+        controller.currentJobFiles
+            .where((path) => path.trim().isNotEmpty)
+            .take(4),
+      );
+    }
+
+    return _SectionCard(
+      title: '지금 진행 중',
+      subtitle: '작업 로그, 복구 상태, 패치/실행 요약을 메인 흐름 안에서 압축해서 보여줍니다.',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            controller.liveActivitySummary,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: const Color(0xFFF4F7FB),
+                ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _MetricChip(
+                  label: '세션 단계', value: controller.currentSessionPhase),
+              _MetricChip(
+                  label: '참여자', value: controller.liveParticipantSummary),
+              _MetricChip(
+                  label: '마지막 동기화', value: controller.sessionLastSyncedLabel),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _SessionSyncBanner(controller: controller),
+          if (reasoning.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _StreamSurface(
+              label: '판단 요약',
+              child: Text(
+                reasoning,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: const Color(0xFFDCE6F2),
+                      height: 1.45,
+                    ),
+              ),
+            ),
+          ],
+          if (planItems.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _StreamSurface(
+              label: '계획 추적',
+              child: _PlanTrace(items: planItems),
+            ),
+          ],
+          if (controller.liveSession.tools.currentLabel.trim().isNotEmpty ||
+              toolActivities.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _StreamSurface(
+              label: '작업 로그',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (controller.liveSession.tools.currentLabel
+                      .trim()
+                      .isNotEmpty)
+                    Text(
+                      '${controller.liveSession.tools.currentLabel} · ${controller.liveSession.tools.currentStatus.isEmpty ? '진행 중' : controller.liveSession.tools.currentStatus}',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: const Color(0xFFF4F7FB),
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                  if (toolActivities.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    ...toolActivities.map(
+                      (activity) => Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Text(
+                          '• ${activity.label.isEmpty ? activity.kind : activity.label}${activity.status.isEmpty ? '' : ' · ${activity.status}'}${activity.detail.isEmpty ? '' : ' · ${activity.detail}'}',
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: const Color(0xFFB7C4D2),
+                                    height: 1.35,
+                                  ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          _StreamSurface(
+            label: '패치',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  controller.patchSummary.isNotEmpty
+                      ? controller.patchSummary
+                      : controller.patchAvailabilityReason,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: const Color(0xFFDCE6F2),
+                        height: 1.45,
+                      ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _MetricPill(
+                      icon: Icons.description_outlined,
+                      label: '파일 ${controller.patchFiles.length}',
+                    ),
+                    if ((controller.currentJobId ?? '').isNotEmpty)
+                      _MetricPill(
+                        icon: Icons.work_outline,
+                        label: controller.currentJobId!,
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          if (controller.runSummary.isNotEmpty ||
+              controller.runStatus.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _StreamSurface(
+              label: '실행',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    controller.runSummary.isEmpty
+                        ? '최근 실행 결과가 아직 없습니다.'
+                        : controller.runSummary,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: const Color(0xFFDCE6F2),
+                          height: 1.45,
+                        ),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      if (controller.runStatus.isNotEmpty)
+                        _MetricPill(
+                          icon: Icons.play_circle_outline,
+                          label: controller.runStatus,
+                        ),
+                      if (controller.topErrors.isNotEmpty)
+                        _MetricPill(
+                          icon: Icons.error_outline,
+                          label: '상위 에러 ${controller.topErrors.length}',
+                        ),
+                    ],
+                  ),
+                  if (controller.topErrors.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    ...controller.topErrors.take(2).map(
+                          (line) => Text(
+                            '• $line',
+                            style:
+                                Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: const Color(0xFFB7C4D2),
+                                      height: 1.35,
+                                    ),
+                          ),
+                        ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+          if (fileHighlights.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _StreamSurface(
+              label: '파일 포커스',
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: fileHighlights
+                    .map((path) => _MetricPill(
+                        icon: Icons.insert_drive_file_outlined,
+                        label: _compactPath(path)))
+                    .toList(),
+              ),
+            ),
+          ],
+          if (terminal.summary.isNotEmpty ||
+              terminal.command.isNotEmpty ||
+              terminal.status.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _StreamSurface(
+              label: '터미널',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (terminal.summary.isNotEmpty)
+                    Text(
+                      terminal.summary,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: const Color(0xFFDCE6F2),
+                            height: 1.45,
+                          ),
+                    ),
+                  if (terminal.command.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      terminal.command,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: const Color(0xFF93A4B7),
+                            fontFamily: 'monospace',
+                          ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+          if (controller.errorMessage != null) ...[
+            const SizedBox(height: 12),
+            _StreamSurface(
+              label: '최근 오류',
+              accent: Theme.of(context).colorScheme.error,
+              child: Text(
+                controller.errorMessage!,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: const Color(0xFFFFD5D2),
+                      height: 1.45,
+                    ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton.tonalIcon(
+                  onPressed: onOpenReview,
+                  style: FilledButton.styleFrom(
+                    foregroundColor: const Color(0xFFF4F7FB),
+                    backgroundColor: const Color(0xFF213244),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  icon: const Icon(Icons.rule_folder_outlined),
+                  label: const Text('패치와 실행'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: onOpenStatus,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFFDCE6F2),
+                    side: const BorderSide(color: Color(0xFF32404D)),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  icon: const Icon(Icons.tune),
+                  label: const Text('세션 센터'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SessionSyncBanner extends StatelessWidget {
+  const _SessionSyncBanner({required this.controller});
 
   final AppController controller;
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-    late final Color tone;
-    late final IconData icon;
-    switch (controller.sessionSyncStatus) {
-      case SessionSyncStatus.live:
-        tone = const Color(0xFF1F8C77);
-        icon = Icons.cloud_done_outlined;
-        break;
-      case SessionSyncStatus.stale:
-        tone = const Color(0xFFD97706);
-        icon = Icons.schedule_outlined;
-        break;
-      case SessionSyncStatus.reconnecting:
-        tone = const Color(0xFF2563EB);
-        icon = Icons.autorenew_rounded;
-        break;
-      case SessionSyncStatus.failed:
-        tone = colors.error;
-        icon = Icons.sync_problem_outlined;
-        break;
-      case SessionSyncStatus.idle:
-        tone = colors.outline;
-        icon = Icons.link_outlined;
-        break;
-    }
+    final tone = _syncTone(context, controller.sessionSyncStatus);
+    final showActions = controller.hasSessionSyncTarget &&
+        controller.sessionSyncStatus != SessionSyncStatus.live;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: tone.withValues(alpha: 0.10),
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(color: tone.withValues(alpha: 0.28)),
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: tone.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: tone.withValues(alpha: 0.28)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(_syncIcon(controller.sessionSyncStatus),
+                  color: tone, size: 18),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  controller.sessionSyncStatusLabel,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        color: tone,
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(icon, size: 18, color: tone),
-                  const SizedBox(width: 8),
-                  Text(
-                    controller.sessionSyncStatusLabel,
-                    style: textTheme.labelLarge?.copyWith(
-                      color: tone,
-                      fontWeight: FontWeight.w700,
+              Text(
+                controller.sessionLastSyncedLabel,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: const Color(0xFFB9C6D4),
                     ),
-                  ),
-                ],
               ),
-            ),
-            _MetricChip(
-              label: '마지막 동기화',
-              value: controller.sessionLastSyncedLabel,
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Text(
-          controller.sessionSyncSummary,
-          style: textTheme.bodyMedium,
-        ),
-        if (controller.sessionSyncDetail.trim().isNotEmpty) ...[
+            ],
+          ),
           const SizedBox(height: 8),
           Text(
-            controller.sessionSyncDetail,
-            style: textTheme.bodySmall?.copyWith(color: tone),
+            controller.sessionSyncSummary,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: const Color(0xFFDCE6F2),
+                  height: 1.35,
+                ),
           ),
-        ],
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(
-              child: FilledButton.tonalIcon(
-                onPressed: controller.canRetrySessionSync
-                    ? () async {
-                        await controller.retrySessionSync();
-                      }
-                    : null,
-                icon: const Icon(Icons.autorenew_rounded),
-                label: const Text('다시 연결'),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: controller.canRefreshSessionSync
-                    ? () async {
-                        await controller.refreshCurrentSession();
-                      }
-                    : null,
-                icon: const Icon(Icons.refresh_rounded),
-                label: const Text('세션 새로고침'),
-              ),
+          if (controller.sessionSyncDetail.trim().isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              controller.sessionSyncDetail,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: const Color(0xFFB9C6D4),
+                    height: 1.35,
+                  ),
             ),
           ],
-        ),
-      ],
+          if (showActions) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.tonalIcon(
+                    onPressed: controller.canRetrySessionSync
+                        ? () async {
+                            await controller.retrySessionSync();
+                          }
+                        : null,
+                    icon: const Icon(Icons.autorenew_rounded),
+                    label: const Text('다시 연결'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: controller.canRefreshSessionSync
+                        ? () async {
+                            await controller.refreshCurrentSession();
+                          }
+                        : null,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFFDCE6F2),
+                      side: const BorderSide(color: Color(0xFF32404D)),
+                    ),
+                    icon: const Icon(Icons.refresh_rounded),
+                    label: const Text('세션 새로고침'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
     );
   }
 }
@@ -643,32 +986,31 @@ class _SectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-
     return Container(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFFFFFFFF), Color(0xFFF5FFFA)],
-        ),
-        border: Border.all(color: colors.outlineVariant),
+        borderRadius: BorderRadius.circular(24),
+        color: const Color(0xFF121A22),
+        border: Border.all(color: const Color(0xFF24303B)),
       ),
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: Theme.of(context).textTheme.titleMedium),
+          Text(
+            title,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  color: const Color(0xFFF4F7FB),
+                ),
+          ),
           const SizedBox(height: 4),
           Text(
             subtitle,
-            style: Theme.of(context)
-                .textTheme
-                .bodySmall
-                ?.copyWith(color: colors.primary),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: const Color(0xFF93A4B7),
+                  height: 1.35,
+                ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           child,
         ],
       ),
@@ -676,36 +1018,114 @@ class _SectionCard extends StatelessWidget {
   }
 }
 
-class _ThreadTile extends StatelessWidget {
-  const _ThreadTile({
-    required this.thread,
-    required this.selected,
-    required this.onTap,
+class _StreamSurface extends StatelessWidget {
+  const _StreamSurface({
+    required this.label,
+    required this.child,
+    this.accent = const Color(0xFFE4B15A),
   });
 
-  final ThreadSummaryView thread;
-  final bool selected;
-  final VoidCallback onTap;
+  final String label;
+  final Widget child;
+  final Color accent;
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      color: selected ? const Color(0xFFE9F7F2) : null,
-      child: ListTile(
-        onTap: onTap,
-        leading: Icon(
-          selected ? Icons.forum : Icons.chat_bubble_outline,
-          color: colors.primary,
-        ),
-        title: Text(thread.title),
-        subtitle: Text(
-          thread.lastEventText.isEmpty ? thread.state : thread.lastEventText,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-        ),
-        trailing: Text(thread.updatedAtLabel),
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0D141B),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFF202A35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: accent,
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+          const SizedBox(height: 8),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _PlanTrace extends StatelessWidget {
+  const _PlanTrace({required this.items});
+
+  final List<SessionPlanItemView> items;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: items.map((item) => _PlanTraceRow(item: item)).toList(),
+    );
+  }
+}
+
+class _PlanTraceRow extends StatelessWidget {
+  const _PlanTraceRow({required this.item});
+
+  final SessionPlanItemView item;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = item.status;
+    Color tone;
+    switch (status) {
+      case 'completed':
+        tone = const Color(0xFF2E9D78);
+        break;
+      case 'in_progress':
+        tone = const Color(0xFF4E8DFF);
+        break;
+      case 'blocked':
+        tone = Theme.of(context).colorScheme.error;
+        break;
+      default:
+        tone = const Color(0xFF8B9AAF);
+        break;
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            margin: const EdgeInsets.only(top: 4),
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(
+              color: tone,
+              borderRadius: BorderRadius.circular(999),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              item.label,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: const Color(0xFFDCE6F2),
+                  ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            _planStatusLabel(item.status),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: tone,
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+        ],
       ),
     );
   }
@@ -719,14 +1139,19 @@ class _ThreadEventTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isUser = event.role == 'user';
-    final bgColor = isUser ? const Color(0xFFE9F7F2) : const Color(0xFFF5F7FF);
+    final bgColor = isUser ? const Color(0xFF13222A) : const Color(0xFF151E2A);
+    final borderColor =
+        isUser ? const Color(0xFF244653) : const Color(0xFF263449);
+    final iconColor =
+        isUser ? const Color(0xFF7FD0B4) : const Color(0xFFB8C7FF);
+
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: bgColor,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFDCE3ED)),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: borderColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -736,42 +1161,57 @@ class _ThreadEventTile extends StatelessWidget {
               Icon(
                 isUser ? Icons.person_outline : Icons.smart_toy_outlined,
                 size: 18,
+                color: iconColor,
               ),
-              const SizedBox(width: 6),
+              const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   event.title,
-                  style: Theme.of(context).textTheme.titleSmall,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        color: const Color(0xFFF4F7FB),
+                      ),
                 ),
               ),
-              Text(event.atLabel, style: Theme.of(context).textTheme.bodySmall),
+              Text(
+                event.atLabel,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: const Color(0xFF93A4B7),
+                    ),
+              ),
             ],
           ),
           if (event.body.isNotEmpty) ...[
             const SizedBox(height: 8),
-            Text(event.body),
+            Text(
+              event.body,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: const Color(0xFFDCE6F2),
+                    height: 1.45,
+                  ),
+            ),
           ],
           if (event.data['status'] != null ||
-              event.data['profileId'] != null) ...[
-            const SizedBox(height: 8),
+              event.data['profileId'] != null ||
+              event.data['fileCount'] != null) ...[
+            const SizedBox(height: 10),
             Wrap(
               spacing: 8,
               runSpacing: 8,
               children: [
                 if (event.data['status'] != null)
-                  _MetricChip(
-                    label: 'status',
-                    value: event.data['status'].toString(),
+                  _MetricPill(
+                    icon: Icons.check_circle_outline,
+                    label: event.data['status'].toString(),
                   ),
                 if (event.data['profileId'] != null)
-                  _MetricChip(
-                    label: 'profile',
-                    value: event.data['profileId'].toString(),
+                  _MetricPill(
+                    icon: Icons.play_circle_outline,
+                    label: event.data['profileId'].toString(),
                   ),
                 if (event.data['fileCount'] != null)
-                  _MetricChip(
-                    label: 'files',
-                    value: event.data['fileCount'].toString(),
+                  _MetricPill(
+                    icon: Icons.description_outlined,
+                    label: 'files ${event.data['fileCount']}',
                   ),
               ],
             ),
@@ -791,22 +1231,31 @@ class _MetricChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      constraints: const BoxConstraints(minWidth: 100, maxWidth: 220),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFD6E9E3)),
+        color: const Color(0xFF0D141B),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF202A35)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: Theme.of(context).textTheme.bodySmall),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: const Color(0xFF8FA0B3),
+                ),
+          ),
+          const SizedBox(height: 4),
           Text(
             value,
-            style: Theme.of(context)
-                .textTheme
-                .bodyMedium
-                ?.copyWith(fontWeight: FontWeight.w700),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: const Color(0xFFF4F7FB),
+                  fontWeight: FontWeight.w700,
+                ),
           ),
         ],
       ),
@@ -814,8 +1263,46 @@ class _MetricChip extends StatelessWidget {
   }
 }
 
-class _ContextTile extends StatelessWidget {
-  const _ContextTile({
+class _MetricPill extends StatelessWidget {
+  const _MetricPill({
+    required this.icon,
+    required this.label,
+    this.tone = const Color(0xFF8B9AAF),
+  });
+
+  final IconData icon;
+  final String label;
+  final Color tone;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      decoration: BoxDecoration(
+        color: tone.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: tone.withValues(alpha: 0.24)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: tone),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: const Color(0xFFDCE6F2),
+                  fontWeight: FontWeight.w600,
+                ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ContextChip extends StatelessWidget {
+  const _ContextChip({
     required this.label,
     required this.value,
     required this.onChanged,
@@ -827,11 +1314,18 @@ class _ContextTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SwitchListTile.adaptive(
-      contentPadding: EdgeInsets.zero,
-      value: value,
-      title: Text(label),
-      onChanged: onChanged,
+    return FilterChip(
+      label: Text(label),
+      selected: value,
+      onSelected: onChanged,
+      backgroundColor: const Color(0xFF0D141B),
+      selectedColor: const Color(0xFF213244),
+      side: const BorderSide(color: Color(0xFF293541)),
+      labelStyle: TextStyle(
+        color: value ? const Color(0xFFF4F7FB) : const Color(0xFFAFBFCE),
+        fontWeight: value ? FontWeight.w700 : FontWeight.w500,
+      ),
+      checkmarkColor: const Color(0xFFE4B15A),
     );
   }
 }
