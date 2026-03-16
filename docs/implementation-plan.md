@@ -173,9 +173,15 @@
   - 파일 포커스 시트에 현재 포커스, 변경 파일, 패치 파일, 최근 에러 위치를 연결
   - 검증: flutter analyze 통과, 안전 경로 기준 flutter test test/app_smoke_test.dart 통과
 
+- 2026-03-16 / mobile drawer shell reframe
+  - reworked the shell into app bar + drawer + bottom composer
+  - moved sessions/files/settings out of the main feed and kept the main surface focused on current work + activity feed
+  - verification: flutter analyze passed, safe-path app_smoke_test passed, full flutter_test_safe.ps1 still shows the pre-existing bootstrap_settings/status_metrics failures
+
 ## 다음 작업 우선순위
 
 1. Session UX foundation
+   - extend the drawer shell into file status/preview/minimal edit instead of re-growing the main surface
    - reasoning summary / plan trace / tool activity schema를 live sync 품질 기준으로 정교화
    - terminal live state 및 event schema를 IDE/mobile 양쪽에서 동일하게 다듬기
    - workspace tree/focus state 모델을 terminal/file surface 이후 단계까지 확장

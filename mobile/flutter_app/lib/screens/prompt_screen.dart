@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../state/app_controller.dart';
 import 'review_screen.dart';
-import 'status_screen.dart';
 
 Color _syncTone(BuildContext context, SessionSyncStatus status) {
   switch (status) {
@@ -96,7 +95,7 @@ class PromptScreen extends StatefulWidget {
 
 class _PromptScreenState extends State<PromptScreen> {
   final _promptController = TextEditingController(
-    text: '테스트 실패 원인을 분석하고 auth middleware 패치를 제안해줘.',
+    text: 'Analyze the failing test and suggest an auth middleware patch.',
   );
   final _promptFocusNode = FocusNode();
 
@@ -106,6 +105,9 @@ class _PromptScreenState extends State<PromptScreen> {
     'latestError': true,
     'workspaceSummary': false,
   };
+
+  int get _selectedContextCount =>
+      _context.values.where((enabled) => enabled).length;
 
   @override
   void dispose() {
@@ -121,171 +123,69 @@ class _PromptScreenState extends State<PromptScreen> {
       builder: (context, _) {
         _syncPromptDraft();
 
-        return ListView(
+        final shouldShowSyncBanner = widget
+                .controller.currentThreadId.isNotEmpty &&
+            (widget.controller.sessionSyncStatus != SessionSyncStatus.live ||
+                widget.controller.sessionSyncDetail.trim().isNotEmpty);
+        final draftPreview = widget.controller.liveDraftPreview.isNotEmpty
+            ? widget.controller.liveDraftPreview
+            : widget.controller.promptDraft;
+
+        return Column(
           key: const ValueKey('session-screen'),
-          padding: const EdgeInsets.fromLTRB(16, 6, 16, 20),
           children: [
-            _SessionHeroCard(
-              controller: widget.controller,
-              onNewThread: _handleNewThread,
-              onSelectThread: (threadId) async {
-                await widget.controller.selectThread(threadId);
-              },
-            ),
-            const SizedBox(height: 14),
-            _SectionCard(
-              title: '세션에 요청',
-              subtitle: '채팅 입력과 공유 draft를 한 카드에 모아 세션 흐름을 끊지 않습니다.',
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 18),
                 children: [
-                  if (widget.controller.liveDraftPreview.isNotEmpty ||
-                      widget.controller.promptDraft.isNotEmpty) ...[
-                    _StreamSurface(
-                      label: '공유 draft',
-                      child: Text(
-                        widget.controller.liveDraftPreview.isNotEmpty
-                            ? widget.controller.liveDraftPreview
-                            : widget.controller.promptDraft,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: const Color(0xFFDCE6F2),
-                              height: 1.45,
-                            ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
+                  if (shouldShowSyncBanner) ...[
+                    _SessionSyncBanner(controller: widget.controller),
+                    const SizedBox(height: 14),
                   ],
-                  TextField(
-                    controller: _promptController,
-                    focusNode: _promptFocusNode,
-                    minLines: 5,
-                    maxLines: 8,
-                    style: const TextStyle(
-                      color: Color(0xFFEAF1F8),
-                      height: 1.45,
-                    ),
-                    onChanged: widget.controller.updatePromptDraft,
-                    decoration: InputDecoration(
-                      hintText: '예: 로그인 실패 원인을 먼저 좁히고, 변경 파일을 최소화한 패치를 제안해줘.',
-                      hintStyle: const TextStyle(color: Color(0xFF7D8EA2)),
-                      filled: true,
-                      fillColor: const Color(0xFF0E151C),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(18),
-                        borderSide: BorderSide.none,
-                      ),
-                      contentPadding: const EdgeInsets.all(16),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    '컨텍스트',
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          color: const Color(0xFFF4F7FB),
-                        ),
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      _ContextChip(
-                        label: '활성 파일',
-                        value: _context['activeFile']!,
-                        onChanged: (value) =>
-                            setState(() => _context['activeFile'] = value),
-                      ),
-                      _ContextChip(
-                        label: '선택 영역',
-                        value: _context['selection']!,
-                        onChanged: (value) =>
-                            setState(() => _context['selection'] = value),
-                      ),
-                      _ContextChip(
-                        label: '최근 오류',
-                        value: _context['latestError']!,
-                        onChanged: (value) =>
-                            setState(() => _context['latestError'] = value),
-                      ),
-                      _ContextChip(
-                        label: '워크스페이스 요약',
-                        value: _context['workspaceSummary']!,
-                        onChanged: (value) => setState(
-                          () => _context['workspaceSummary'] = value,
-                        ),
-                      ),
-                    ],
+                  _WorkstreamCard(
+                    controller: widget.controller,
+                    onOpenReview: _showReviewSheet,
                   ),
                   const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          icon: const Icon(Icons.send_rounded),
-                          label: const Text('세션에 보내기'),
-                          style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            backgroundColor: const Color(0xFFE4B15A),
-                            foregroundColor: const Color(0xFF10161D),
+                  _SectionCard(
+                    title: 'Activity Feed',
+                    subtitle:
+                        'Read prompts, patches, and run results in one feed.',
+                    child: widget.controller.threadEvents.isEmpty
+                        ? Text(
+                            'No session events yet. Send the first request from the composer below to start the feed.',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(
+                                  color: const Color(0xFF9FB0C0),
+                                  height: 1.45,
+                                ),
+                          )
+                        : Column(
+                            children: widget.controller.threadEvents
+                                .map((event) => _ThreadEventTile(event: event))
+                                .toList(),
                           ),
-                          onPressed: widget.controller.isLoading
-                              ? null
-                              : _submitPrompt,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          icon: const Icon(Icons.restart_alt),
-                          label: const Text('입력 지우기'),
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            foregroundColor: const Color(0xFFDCE6F2),
-                            side: const BorderSide(color: Color(0xFF32404D)),
-                          ),
-                          onPressed: _clearPrompt,
-                        ),
-                      ),
-                    ],
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 14),
-            _WorkstreamCard(
+            _ComposerDock(
               controller: widget.controller,
-              onOpenReview: _showReviewSheet,
-              onOpenStatus: _showStatusSheet,
-              onOpenTerminal: _showTerminalSheet,
-              onOpenFiles: _showFileSheet,
-            ),
-            const SizedBox(height: 14),
-            _SectionCard(
-              title: '작업 로그',
-              subtitle: '프롬프트, 패치, 실행 결과를 시간순으로 이어서 읽는 메인 피드입니다.',
-              child: widget.controller.threadEvents.isEmpty
-                  ? Text(
-                      '아직 세션 이벤트가 없습니다. 위 입력창에서 첫 요청을 보내면 여기로 흐름이 쌓입니다.',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: const Color(0xFF9FB0C0),
-                            height: 1.45,
-                          ),
-                    )
-                  : Column(
-                      children: widget.controller.threadEvents
-                          .map((event) => _ThreadEventTile(event: event))
-                          .toList(),
-                    ),
+              promptController: _promptController,
+              promptFocusNode: _promptFocusNode,
+              draftPreview: draftPreview,
+              selectedContextCount: _selectedContextCount,
+              onChanged: widget.controller.updatePromptDraft,
+              onOpenContextSheet: _showContextSheet,
+              onClear: _clearPrompt,
+              onSubmit: _submitPrompt,
             ),
           ],
         );
       },
     );
-  }
-
-  void _handleNewThread() {
-    widget.controller.beginNewThread();
-    _clearPrompt();
   }
 
   void _clearPrompt() {
@@ -310,7 +210,7 @@ class _PromptScreenState extends State<PromptScreen> {
     }
     messenger.showSnackBar(
       SnackBar(
-        content: Text(error ?? 'PROMPT_SUBMIT 완료'),
+        content: Text(error ?? 'PROMPT_SUBMIT done'),
       ),
     );
   }
@@ -336,33 +236,78 @@ class _PromptScreenState extends State<PromptScreen> {
 
   Future<void> _showReviewSheet() async {
     await _showBottomSheet(
-      title: '패치와 실행',
-      subtitle: '검토와 실행 결과를 세션 흐름과 붙여서 확인합니다.',
+      title: 'Review and Run',
+      subtitle:
+          'Keep patch review and run results attached to the live session flow.',
       child: ReviewScreen(controller: widget.controller),
     );
   }
 
-  Future<void> _showStatusSheet() async {
-    await _showBottomSheet(
-      title: '세션 센터',
-      subtitle: '연결, bootstrap, direct signaling 같은 운영 표면을 모아둡니다.',
-      child: StatusScreen(controller: widget.controller),
-    );
-  }
-
-  Future<void> _showTerminalSheet() async {
-    await _showBottomSheet(
-      title: '터미널',
-      subtitle: '현재 세션에서 보고 있는 실행 상태와 최근 출력을 바로 확인합니다.',
-      child: _TerminalSheet(controller: widget.controller),
-    );
-  }
-
-  Future<void> _showFileSheet() async {
-    await _showBottomSheet(
-      title: '파일 포커스',
-      subtitle: '현재 세션의 focus, changed files, patch files를 한 번에 봅니다.',
-      child: _FileFocusSheet(controller: widget.controller),
+  Future<void> _showContextSheet() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFF10161D),
+      showDragHandle: true,
+      builder: (context) {
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Context',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: const Color(0xFFF4F7FB),
+                      ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Keep the main surface clean and only attach the details you need here.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: const Color(0xFF93A4B7),
+                        height: 1.4,
+                      ),
+                ),
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _ContextChip(
+                      label: 'Active File',
+                      value: _context['activeFile']!,
+                      onChanged: (value) =>
+                          setState(() => _context['activeFile'] = value),
+                    ),
+                    _ContextChip(
+                      label: 'Selection',
+                      value: _context['selection']!,
+                      onChanged: (value) =>
+                          setState(() => _context['selection'] = value),
+                    ),
+                    _ContextChip(
+                      label: 'Latest Error',
+                      value: _context['latestError']!,
+                      onChanged: (value) =>
+                          setState(() => _context['latestError'] = value),
+                    ),
+                    _ContextChip(
+                      label: 'Workspace Summary',
+                      value: _context['workspaceSummary']!,
+                      onChanged: (value) => setState(
+                        () => _context['workspaceSummary'] = value,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -445,169 +390,160 @@ class _PromptScreenState extends State<PromptScreen> {
   }
 }
 
-class _SessionHeroCard extends StatelessWidget {
-  const _SessionHeroCard({
+class _ComposerDock extends StatelessWidget {
+  const _ComposerDock({
     required this.controller,
-    required this.onNewThread,
-    required this.onSelectThread,
+    required this.promptController,
+    required this.promptFocusNode,
+    required this.draftPreview,
+    required this.selectedContextCount,
+    required this.onChanged,
+    required this.onOpenContextSheet,
+    required this.onClear,
+    required this.onSubmit,
   });
 
   final AppController controller;
-  final VoidCallback onNewThread;
-  final ValueChanged<String> onSelectThread;
+  final TextEditingController promptController;
+  final FocusNode promptFocusNode;
+  final String draftPreview;
+  final int selectedContextCount;
+  final ValueChanged<String> onChanged;
+  final VoidCallback onOpenContextSheet;
+  final VoidCallback onClear;
+  final VoidCallback onSubmit;
 
   @override
   Widget build(BuildContext context) {
-    final syncTone = _syncTone(context, controller.sessionSyncStatus);
-    final activeThreads = controller.threads.take(4).toList();
-
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF141F29), Color(0xFF0E161D)],
-        ),
-        border: Border.all(color: const Color(0xFF27333F)),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x22000000),
-            blurRadius: 18,
-            offset: Offset(0, 10),
+    return AnimatedPadding(
+      duration: const Duration(milliseconds: 180),
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: SafeArea(
+        top: false,
+        child: Container(
+          margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0D141B),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0xFF202A35)),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x44000000),
+                blurRadius: 20,
+                offset: Offset(0, 10),
+              ),
+            ],
           ),
-        ],
-      ),
-      padding: const EdgeInsets.all(18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '공유 세션',
-                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                            color: const Color(0xFFE4B15A),
-                            letterSpacing: 0.8,
-                            fontWeight: FontWeight.w700,
-                          ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      controller.currentThreadTitle,
-                      style:
-                          Theme.of(context).textTheme.headlineMedium?.copyWith(
-                                color: const Color(0xFFF4F7FB),
-                                height: 1.1,
-                              ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      '${controller.currentSessionPhase} · ${controller.connectionState}',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: const Color(0xFF96A7BA),
-                            fontWeight: FontWeight.w600,
-                          ),
-                    ),
-                  ],
-                ),
-              ),
-              TextButton.icon(
-                onPressed: onNewThread,
-                style: TextButton.styleFrom(
-                  foregroundColor: const Color(0xFFDCE6F2),
-                ),
-                icon: const Icon(Icons.add_comment_outlined),
-                label: const Text('새 세션'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _MetricPill(
-                icon: _syncIcon(controller.sessionSyncStatus),
-                label: controller.sessionSyncStatusLabel,
-                tone: syncTone,
-              ),
-              _MetricPill(
-                icon: Icons.group_outlined,
-                label: controller.liveParticipantSummary,
-              ),
-              _MetricPill(
-                icon: Icons.route_outlined,
-                label: controller.controlPath,
-              ),
-              _MetricPill(
-                icon: Icons.rule_folder_outlined,
-                label: '패치 ${controller.patchFiles.length}개',
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              _MetricChip(
-                label: '현재 Job',
-                value: controller.currentJobId ?? '-',
-              ),
-              _MetricChip(
-                label: '포커스',
-                value: _compactPath(controller.liveFocusSummary),
-              ),
-              _MetricChip(
-                label: '작업 디렉토리',
-                value: controller.adapterRuntime.workspaceRoot.isEmpty
-                    ? '-'
-                    : _compactPath(controller.adapterRuntime.workspaceRoot,
-                        keep: 28),
-              ),
-            ],
-          ),
-          if (activeThreads.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            Text(
-              '최근 세션',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    color: const Color(0xFFDCE6F2),
+              if (draftPreview.trim().isNotEmpty) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
                   ),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: activeThreads
-                  .map(
-                    (thread) => ChoiceChip(
-                      label: Text(
-                        thread.title,
-                        overflow: TextOverflow.ellipsis,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF121C25),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFF223140)),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        controller.liveComposerTyping
+                            ? Icons.edit_note_rounded
+                            : Icons.sync_alt_rounded,
+                        size: 16,
+                        color: const Color(0xFFE4B15A),
                       ),
-                      selected: thread.id == controller.currentThreadId,
-                      onSelected: (_) => onSelectThread(thread.id),
-                      backgroundColor: const Color(0xFF111922),
-                      selectedColor: const Color(0xFF253445),
-                      side: const BorderSide(color: Color(0xFF2B3742)),
-                      labelStyle: TextStyle(
-                        color: thread.id == controller.currentThreadId
-                            ? const Color(0xFFF4F7FB)
-                            : const Color(0xFFB4C2CF),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          draftPreview,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: const Color(0xFFDCE6F2),
+                                    height: 1.35,
+                                  ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
+              ],
+              TextField(
+                controller: promptController,
+                focusNode: promptFocusNode,
+                minLines: 3,
+                maxLines: 6,
+                style: const TextStyle(
+                  color: Color(0xFFEAF1F8),
+                  height: 1.45,
+                ),
+                onChanged: onChanged,
+                decoration: InputDecoration(
+                  hintText: 'Plan, @ for context, / for commands',
+                  hintStyle: const TextStyle(color: Color(0xFF7D8EA2)),
+                  filled: true,
+                  fillColor: const Color(0xFF0A1016),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(18),
+                    borderSide: BorderSide.none,
+                  ),
+                  contentPadding: const EdgeInsets.all(16),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: onOpenContextSheet,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFFDCE6F2),
+                        side: const BorderSide(color: Color(0xFF32404D)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      icon: const Icon(Icons.tune),
+                      label: Text('Context $selectedContextCount'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton.outlined(
+                    tooltip: 'Clear draft',
+                    onPressed: onClear,
+                    style: IconButton.styleFrom(
+                      foregroundColor: const Color(0xFFDCE6F2),
+                      side: const BorderSide(color: Color(0xFF32404D)),
+                    ),
+                    icon: const Icon(Icons.restart_alt),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton.icon(
+                    onPressed: controller.isLoading ? null : onSubmit,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFFE4B15A),
+                      foregroundColor: const Color(0xFF10161D),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
                       ),
                     ),
-                  )
-                  .toList(),
-            ),
-          ],
-        ],
+                    icon: const Icon(Icons.send_rounded),
+                    label: const Text('Send'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -617,16 +553,10 @@ class _WorkstreamCard extends StatelessWidget {
   const _WorkstreamCard({
     required this.controller,
     required this.onOpenReview,
-    required this.onOpenStatus,
-    required this.onOpenTerminal,
-    required this.onOpenFiles,
   });
 
   final AppController controller;
   final VoidCallback onOpenReview;
-  final VoidCallback onOpenStatus;
-  final VoidCallback onOpenTerminal;
-  final VoidCallback onOpenFiles;
 
   @override
   Widget build(BuildContext context) {
@@ -634,27 +564,14 @@ class _WorkstreamCard extends StatelessWidget {
     final planItems = controller.liveSession.plan.items.take(4).toList();
     final toolActivities =
         controller.liveSession.tools.activities.reversed.take(3).toList();
-    final terminal = controller.liveSession.terminal;
-    final workspace = controller.liveSession.workspace;
-    final fileHighlights = <String>{};
-
-    if (workspace.activeFilePath.trim().isNotEmpty) {
-      fileHighlights.add(workspace.activeFilePath.trim());
-    }
-    fileHighlights.addAll(
-      workspace.changedFiles.where((path) => path.trim().isNotEmpty).take(4),
-    );
-    if (fileHighlights.isEmpty) {
-      fileHighlights.addAll(
-        controller.currentJobFiles
-            .where((path) => path.trim().isNotEmpty)
-            .take(4),
-      );
-    }
+    final activeFile = _firstNonEmptyText([
+      controller.liveSession.focus.activeFilePath,
+      controller.liveSession.workspace.activeFilePath,
+    ]);
 
     return _SectionCard(
-      title: '지금 진행 중',
-      subtitle: '작업 로그, 복구 상태, 패치/실행 요약을 메인 흐름 안에서 압축해서 보여줍니다.',
+      title: 'Current Work',
+      subtitle: 'Keep only the state you need in the main session feed.',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -664,25 +581,18 @@ class _WorkstreamCard extends StatelessWidget {
                   color: const Color(0xFFF4F7FB),
                 ),
           ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _MetricChip(
-                  label: '세션 단계', value: controller.currentSessionPhase),
-              _MetricChip(
-                  label: '참여자', value: controller.liveParticipantSummary),
-              _MetricChip(
-                  label: '마지막 동기화', value: controller.sessionLastSyncedLabel),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _SessionSyncBanner(controller: controller),
+          if (activeFile.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            _MetricPill(
+              icon: Icons.insert_drive_file_outlined,
+              label: _compactPath(activeFile, keep: 42),
+              tone: const Color(0xFF4E8DFF),
+            ),
+          ],
           if (reasoning.isNotEmpty) ...[
             const SizedBox(height: 12),
             _StreamSurface(
-              label: '판단 요약',
+              label: 'Reasoning',
               child: Text(
                 reasoning,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -695,7 +605,7 @@ class _WorkstreamCard extends StatelessWidget {
           if (planItems.isNotEmpty) ...[
             const SizedBox(height: 12),
             _StreamSurface(
-              label: '계획 추적',
+              label: 'Plan',
               child: _PlanTrace(items: planItems),
             ),
           ],
@@ -703,7 +613,7 @@ class _WorkstreamCard extends StatelessWidget {
               toolActivities.isNotEmpty) ...[
             const SizedBox(height: 12),
             _StreamSurface(
-              label: '작업 로그',
+              label: 'Tool Log',
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -711,7 +621,7 @@ class _WorkstreamCard extends StatelessWidget {
                       .trim()
                       .isNotEmpty)
                     Text(
-                      '${controller.liveSession.tools.currentLabel} · ${controller.liveSession.tools.currentStatus.isEmpty ? '진행 중' : controller.liveSession.tools.currentStatus}',
+                      '${controller.liveSession.tools.currentLabel} / ${controller.liveSession.tools.currentStatus.isEmpty ? 'Working' : controller.liveSession.tools.currentStatus}',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                             color: const Color(0xFFF4F7FB),
                             fontWeight: FontWeight.w600,
@@ -723,7 +633,7 @@ class _WorkstreamCard extends StatelessWidget {
                       (activity) => Padding(
                         padding: const EdgeInsets.only(bottom: 6),
                         child: Text(
-                          '• ${activity.label.isEmpty ? activity.kind : activity.label}${activity.status.isEmpty ? '' : ' · ${activity.status}'}${activity.detail.isEmpty ? '' : ' · ${activity.detail}'}',
+                          '- ${activity.label.isEmpty ? activity.kind : activity.label}${activity.status.isEmpty ? '' : ' / ${activity.status}'}${activity.detail.isEmpty ? '' : ' / ${activity.detail}'}',
                           style:
                               Theme.of(context).textTheme.bodySmall?.copyWith(
                                     color: const Color(0xFFB7C4D2),
@@ -739,77 +649,39 @@ class _WorkstreamCard extends StatelessWidget {
           ],
           const SizedBox(height: 12),
           _StreamSurface(
-            label: '패치',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  controller.patchSummary.isNotEmpty
-                      ? controller.patchSummary
-                      : controller.patchAvailabilityReason,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: const Color(0xFFDCE6F2),
-                        height: 1.45,
-                      ),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    _MetricPill(
-                      icon: Icons.description_outlined,
-                      label: '파일 ${controller.patchFiles.length}',
-                    ),
-                    if ((controller.currentJobId ?? '').isNotEmpty)
-                      _MetricPill(
-                        icon: Icons.work_outline,
-                        label: controller.currentJobId!,
-                      ),
-                  ],
-                ),
-              ],
+            label: 'Patch',
+            child: Text(
+              controller.patchSummary.isNotEmpty
+                  ? controller.patchSummary
+                  : controller.patchAvailabilityReason,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: const Color(0xFFDCE6F2),
+                    height: 1.45,
+                  ),
             ),
           ),
           if (controller.runSummary.isNotEmpty ||
               controller.runStatus.isNotEmpty) ...[
             const SizedBox(height: 12),
             _StreamSurface(
-              label: '실행',
+              label: 'Run',
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     controller.runSummary.isEmpty
-                        ? '최근 실행 결과가 아직 없습니다.'
+                        ? 'No run results yet.'
                         : controller.runSummary,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: const Color(0xFFDCE6F2),
                           height: 1.45,
                         ),
                   ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      if (controller.runStatus.isNotEmpty)
-                        _MetricPill(
-                          icon: Icons.play_circle_outline,
-                          label: controller.runStatus,
-                        ),
-                      if (controller.topErrors.isNotEmpty)
-                        _MetricPill(
-                          icon: Icons.error_outline,
-                          label: '상위 에러 ${controller.topErrors.length}',
-                        ),
-                    ],
-                  ),
                   if (controller.topErrors.isNotEmpty) ...[
                     const SizedBox(height: 8),
                     ...controller.topErrors.take(2).map(
                           (line) => Text(
-                            '• $line',
+                            '- $line',
                             style:
                                 Theme.of(context).textTheme.bodySmall?.copyWith(
                                       color: const Color(0xFFB7C4D2),
@@ -822,56 +694,10 @@ class _WorkstreamCard extends StatelessWidget {
               ),
             ),
           ],
-          if (fileHighlights.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            _StreamSurface(
-              label: '파일 포커스',
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: fileHighlights
-                    .map((path) => _MetricPill(
-                        icon: Icons.insert_drive_file_outlined,
-                        label: _compactPath(path)))
-                    .toList(),
-              ),
-            ),
-          ],
-          if (terminal.summary.isNotEmpty ||
-              terminal.command.isNotEmpty ||
-              terminal.status.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            _StreamSurface(
-              label: '터미널',
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (terminal.summary.isNotEmpty)
-                    Text(
-                      terminal.summary,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: const Color(0xFFDCE6F2),
-                            height: 1.45,
-                          ),
-                    ),
-                  if (terminal.command.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      terminal.command,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: const Color(0xFF93A4B7),
-                            fontFamily: 'monospace',
-                          ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ],
           if (controller.errorMessage != null) ...[
             const SizedBox(height: 12),
             _StreamSurface(
-              label: '최근 오류',
+              label: 'Last Error',
               accent: Theme.of(context).colorScheme.error,
               child: Text(
                 controller.errorMessage!,
@@ -883,64 +709,18 @@ class _WorkstreamCard extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: FilledButton.tonalIcon(
-                  onPressed: onOpenReview,
-                  style: FilledButton.styleFrom(
-                    foregroundColor: const Color(0xFFF4F7FB),
-                    backgroundColor: const Color(0xFF213244),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
-                  icon: const Icon(Icons.rule_folder_outlined),
-                  label: const Text('패치와 실행'),
-                ),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.tonalIcon(
+              onPressed: onOpenReview,
+              style: FilledButton.styleFrom(
+                foregroundColor: const Color(0xFFF4F7FB),
+                backgroundColor: const Color(0xFF213244),
+                padding: const EdgeInsets.symmetric(vertical: 14),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: onOpenStatus,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFFDCE6F2),
-                    side: const BorderSide(color: Color(0xFF32404D)),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
-                  icon: const Icon(Icons.tune),
-                  label: const Text('세션 센터'),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: FilledButton.tonalIcon(
-                  onPressed: onOpenTerminal,
-                  style: FilledButton.styleFrom(
-                    foregroundColor: const Color(0xFF10161D),
-                    backgroundColor: const Color(0xFFE4B15A),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
-                  icon: const Icon(Icons.terminal_rounded),
-                  label: const Text('터미널 보기'),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: onOpenFiles,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFFDCE6F2),
-                    side: const BorderSide(color: Color(0xFF32404D)),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
-                  icon: const Icon(Icons.account_tree_outlined),
-                  label: const Text('파일 보기'),
-                ),
-              ),
-            ],
+              icon: const Icon(Icons.rule_folder_outlined),
+              label: const Text('Open Review and Run'),
+            ),
           ),
         ],
       ),
@@ -948,8 +728,8 @@ class _WorkstreamCard extends StatelessWidget {
   }
 }
 
-class _TerminalSheet extends StatelessWidget {
-  const _TerminalSheet({required this.controller});
+class TerminalSheet extends StatelessWidget {
+  const TerminalSheet({super.key, required this.controller});
 
   final AppController controller;
 
@@ -1087,8 +867,8 @@ class _TerminalSheet extends StatelessWidget {
   }
 }
 
-class _FileFocusSheet extends StatelessWidget {
-  const _FileFocusSheet({required this.controller});
+class FileFocusSheet extends StatelessWidget {
+  const FileFocusSheet({super.key, required this.controller});
 
   final AppController controller;
 
