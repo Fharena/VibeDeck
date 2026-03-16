@@ -42,7 +42,7 @@ class VibeDeckApp extends StatelessWidget {
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'VibeDeck Mobile',
+      title: '바이브덱 모바일',
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
@@ -141,7 +141,7 @@ class _MobileShellState extends State<MobileShell> {
       animation: _controller,
       builder: (context, _) {
         final currentTitle = _controller.currentThreadTitle.trim().isEmpty
-            ? 'New Session'
+            ? '새 세션'
             : _controller.currentThreadTitle.trim();
 
         return Scaffold(
@@ -160,27 +160,24 @@ class _MobileShellState extends State<MobileShell> {
             onOpenStatus: () async {
               Navigator.of(context).pop();
               await _showBottomSheet(
-                title: 'Session Center',
-                subtitle:
-                    'Connection, bootstrap, and direct signaling live here.',
+                title: '세션 센터',
+                subtitle: '연결, bootstrap, direct signaling 같은 운영 표면을 모아둭니다.',
                 child: StatusScreen(controller: _controller),
               );
             },
             onOpenTerminal: () async {
               Navigator.of(context).pop();
               await _showBottomSheet(
-                title: 'Terminal',
-                subtitle:
-                    'Inspect the current run state and recent terminal output.',
+                title: '터미널',
+                subtitle: '현재 세션에서 보고 있는 실행 상태와 최근 출력을 바로 확인합니다.',
                 child: TerminalSheet(controller: _controller),
               );
             },
             onOpenFiles: () async {
               Navigator.of(context).pop();
               await _showBottomSheet(
-                title: 'File Focus',
-                subtitle:
-                    'Review focus, changed files, and patch files for this session.',
+                title: '파일 포커스',
+                subtitle: '현재 세션의 포커스, 변경 파일, 패치 파일을 한 번에 봅니다.',
                 child: FileFocusSheet(controller: _controller),
               );
             },
@@ -230,7 +227,7 @@ class _MobileShellState extends State<MobileShell> {
                   ),
                 ),
               IconButton(
-                tooltip: 'New Session',
+                tooltip: '새 세션',
                 onPressed: _controller.beginNewThread,
                 icon: const Icon(Icons.add),
               ),
@@ -386,7 +383,7 @@ class _ShellDrawerState extends State<_ShellDrawer> {
                 child: Row(
                   children: [
                     IconButton(
-                      tooltip: 'Close drawer',
+                      tooltip: '드로어 닫기',
                       onPressed: () => Navigator.of(context).pop(),
                       icon: const Icon(Icons.menu_open_rounded),
                     ),
@@ -397,7 +394,7 @@ class _ShellDrawerState extends State<_ShellDrawer> {
                         onChanged: (_) => setState(() {}),
                         style: const TextStyle(color: Color(0xFFF4F7FB)),
                         decoration: InputDecoration(
-                          hintText: 'Search Sessions...',
+                          hintText: '세션 검색...',
                           hintStyle: const TextStyle(color: Color(0xFF6F7D8B)),
                           filled: true,
                           fillColor: const Color(0xFF11161C),
@@ -429,7 +426,7 @@ class _ShellDrawerState extends State<_ShellDrawer> {
                         borderRadius: BorderRadius.circular(14),
                       ),
                     ),
-                    child: const Text('New Agent'),
+                    child: const Text('새 세션'),
                   ),
                 ),
               ),
@@ -439,9 +436,9 @@ class _ShellDrawerState extends State<_ShellDrawer> {
                 unselectedLabelColor: Color(0xFF7F8D9C),
                 indicatorColor: Color(0xFFE4B15A),
                 tabs: [
-                  Tab(text: 'Sessions'),
-                  Tab(text: 'Files'),
-                  Tab(text: 'Settings'),
+                  Tab(text: '세션'),
+                  Tab(text: '파일'),
+                  Tab(text: '설정'),
                 ],
               ),
               Expanded(
@@ -501,16 +498,14 @@ class _SessionDrawerTab extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
         children: [
           Text(
-            'Sessions',
+            '세션',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   color: const Color(0xFFF4F7FB),
                 ),
           ),
           const SizedBox(height: 10),
           Text(
-            normalizedQuery.isEmpty
-                ? 'No sessions yet.'
-                : 'No sessions match this search.',
+            normalizedQuery.isEmpty ? '아직 세션이 없습니다.' : '검색 조건과 맞는 세션이 없습니다.',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: const Color(0xFF9FB0C0),
                   height: 1.45,
@@ -527,7 +522,7 @@ class _SessionDrawerTab extends StatelessWidget {
       itemBuilder: (context, index) {
         if (index == 0) {
           return Text(
-            'Sessions',
+            '세션',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   color: const Color(0xFFF4F7FB),
                 ),
@@ -537,7 +532,7 @@ class _SessionDrawerTab extends StatelessWidget {
         final thread = threads[index - 1];
         final isSelected = thread.id == controller.currentThreadId;
         final preview = thread.lastEventText.trim().isEmpty
-            ? 'No events yet.'
+            ? '아직 이벤트가 없습니다.'
             : thread.lastEventText.trim();
 
         return InkWell(
@@ -607,7 +602,7 @@ class _SessionDrawerTab extends StatelessWidget {
                   runSpacing: 8,
                   children: [
                     _DrawerBadge(
-                      label: thread.state.isEmpty ? 'draft' : thread.state,
+                      label: thread.state.isEmpty ? '초안' : thread.state,
                     ),
                     if (thread.currentJobId.isNotEmpty)
                       _DrawerBadge(
@@ -647,7 +642,7 @@ class _FilesDrawerTab extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
       children: [
         Text(
-          'Files',
+          '파일',
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
                 color: const Color(0xFFF4F7FB),
               ),
@@ -663,7 +658,7 @@ class _FilesDrawerTab extends StatelessWidget {
         const SizedBox(height: 12),
         if (files.isEmpty)
           Text(
-            'No file focus yet. Patch or run activity will surface the files this session is looking at.',
+            '아직 파일 포커스가 없습니다. 패치나 실행이 생기면 이 세션이 보고 있는 파일이 여기에 표시됩니다.',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: const Color(0xFF9FB0C0),
                   height: 1.45,
@@ -696,7 +691,7 @@ class _SettingsDrawerTab extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
       children: [
         Text(
-          'Settings',
+          '설정',
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
                 color: const Color(0xFFF4F7FB),
               ),
@@ -704,40 +699,39 @@ class _SettingsDrawerTab extends StatelessWidget {
         const SizedBox(height: 12),
         _DrawerInfoCard(
           rows: [
-            _DrawerInfoRow(label: 'Agent', value: controller.agentBaseUrl),
+            _DrawerInfoRow(label: '에이전트', value: controller.agentBaseUrl),
+            _DrawerInfoRow(label: '시그널링', value: controller.signalingBaseUrl),
             _DrawerInfoRow(
-                label: 'Signaling', value: controller.signalingBaseUrl),
-            _DrawerInfoRow(
-              label: 'Adapter',
+              label: '어댑터',
               value: controller.adapterRuntime.name.isEmpty
                   ? controller.bootstrap.adapter.name
                   : controller.adapterRuntime.name,
             ),
-            _DrawerInfoRow(label: 'Control', value: controller.controlPath),
-            _DrawerInfoRow(label: 'State', value: controller.connectionState),
+            _DrawerInfoRow(label: '제어 경로', value: controller.controlPath),
+            _DrawerInfoRow(label: '연결 상태', value: controller.connectionState),
             _DrawerInfoRow(
-                label: 'Sync', value: controller.sessionSyncStatusLabel),
+                label: '동기화', value: controller.sessionSyncStatusLabel),
           ],
         ),
         const SizedBox(height: 12),
         _DrawerInfoCard(
           rows: [
             _DrawerInfoRow(
-              label: 'Workspace',
+              label: '작업 경로',
               value: _firstNonEmptyText([
                 controller.liveSession.workspace.rootPath,
                 controller.adapterRuntime.workspaceRoot,
               ], fallback: '-'),
             ),
             _DrawerInfoRow(
-                label: 'Last Sync', value: controller.sessionLastSyncedLabel),
+                label: '마지막 동기화', value: controller.sessionLastSyncedLabel),
           ],
         ),
         const SizedBox(height: 14),
         FilledButton.tonalIcon(
           onPressed: onOpenStatus,
           icon: const Icon(Icons.tune),
-          label: const Text('Open Session Center'),
+          label: const Text('세션 센터 열기'),
         ),
         const SizedBox(height: 10),
         OutlinedButton.icon(
@@ -747,7 +741,7 @@ class _SettingsDrawerTab extends StatelessWidget {
             side: const BorderSide(color: Color(0xFF32404D)),
           ),
           icon: const Icon(Icons.terminal_rounded),
-          label: const Text('Open Terminal'),
+          label: const Text('터미널 열기'),
         ),
       ],
     );
@@ -1055,14 +1049,14 @@ class _WorkspaceFileRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final badges = <Widget>[
       if (entry.isActive)
-        const _DrawerBadge(label: 'ACT', tone: Color(0xFF4E8DFF)),
+        const _DrawerBadge(label: '현재', tone: Color(0xFF4E8DFF)),
       if (entry.isChanged)
-        const _DrawerBadge(label: 'MOD', tone: Color(0xFF2E9D78)),
+        const _DrawerBadge(label: '변경', tone: Color(0xFF2E9D78)),
       if (entry.isPatch)
-        const _DrawerBadge(label: 'PATCH', tone: Color(0xFFE4B15A)),
+        const _DrawerBadge(label: '패치', tone: Color(0xFFE4B15A)),
       if (entry.hasError)
         _DrawerBadge(
-          label: 'ERR',
+          label: '오류',
           tone: Theme.of(context).colorScheme.error,
         ),
     ];

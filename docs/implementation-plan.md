@@ -167,28 +167,28 @@
   - 동기화 상태는 유지하되 workstream surface 안으로 압축
   - 패치와 실행, 세션 센터는 보조 액션으로 유지하고 비핵심 카드 노출을 축소
   - 검증: flutter analyze 통과, 안전 경로 기준 flutter test test/app_smoke_test.dart 통과
-- 2026-03-15 / 모바일 터미널·파일 표면 polish
+- 2026-03-15 / 모바일 터미널·파일 표면 다듬기
   - workstream 카드에서 터미널 보기, 파일 보기 액션을 열어 bottom sheet로 세션 세부 표면을 노출
   - 터미널 시트에 실행 요약, 실행 명령, 최근 출력, 상위 에러, 최근 변경 파일을 연결
   - 파일 포커스 시트에 현재 포커스, 변경 파일, 패치 파일, 최근 에러 위치를 연결
   - 검증: flutter analyze 통과, 안전 경로 기준 flutter test test/app_smoke_test.dart 통과
 
-- 2026-03-16 / mobile drawer shell reframe
-  - reworked the shell into app bar + drawer + bottom composer
-  - moved sessions/files/settings out of the main feed and kept the main surface focused on current work + activity feed
-  - verification: flutter analyze passed, safe-path app_smoke_test passed, full flutter_test_safe.ps1 still shows the pre-existing bootstrap_settings/status_metrics failures
+- 2026-03-16 / 모바일 드로어 셸 재구성
+  - 셸을 앱 바 + 드로어 + 하단 composer 구조로 재구성
+  - 세션/파일/설정을 메인 피드 밖으로 옮기고 메인 화면은 현재 작업 + 작업 로그에 집중하도록 정리
+  - 검증: flutter analyze 통과, 안전 경로 app_smoke_test 통과, 전체 flutter_test_safe.ps1는 기존 bootstrap_settings/status_metrics 실패가 그대로 남아 있음
 
 ## 다음 작업 우선순위
 
-1. Session UX foundation
-   - extend the drawer shell into file status/preview/minimal edit instead of re-growing the main surface
-   - reasoning summary / plan trace / tool activity schema를 live sync 품질 기준으로 정교화
-   - terminal live state 및 event schema를 IDE/mobile 양쪽에서 동일하게 다듬기
+1. 세션 UX 기반 정리
+   - 드로어 셸 안에서 파일 상태/미리보기/최소 편집을 확장하되 메인 화면은 다시 불리지 않기
+   - 판단 요약 / 계획 흐름 / 도구 활동 스키마를 live sync 품질 기준으로 정교화
+   - 터미널 live state 및 이벤트 스키마를 IDE/mobile 양쪽에서 동일하게 다듬기
    - workspace tree/focus state 모델을 terminal/file surface 이후 단계까지 확장
-2. Cursor panel redesign
+2. Cursor 패널 재구성
    - panel을 `채팅 + 작업 로그 + 터미널 + 파일 트리` 중심 레이아웃으로 개편
    - 현재 thread viewer 성격을 shared session workspace surface로 승격
-3. live terminal/file focus sync
+3. 실시간 터미널/파일 포커스 동기화
    - Cursor와 모바일이 같은 terminal tail / focused file / changed files를 공유
    - 작업 전환 시 focus/selection/error pointer가 양쪽에서 같은 타이밍으로 보이게 정리
 4. Cursor 세션 복원/로그 가시성 + stalled recovery

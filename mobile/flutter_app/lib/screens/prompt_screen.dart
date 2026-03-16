@@ -95,7 +95,7 @@ class PromptScreen extends StatefulWidget {
 
 class _PromptScreenState extends State<PromptScreen> {
   final _promptController = TextEditingController(
-    text: 'Analyze the failing test and suggest an auth middleware patch.',
+    text: '테스트 실패 원인을 분석하고 인증 미들웨어 패치를 제안해줘.',
   );
   final _promptFocusNode = FocusNode();
 
@@ -148,12 +148,11 @@ class _PromptScreenState extends State<PromptScreen> {
                   ),
                   const SizedBox(height: 14),
                   _SectionCard(
-                    title: 'Activity Feed',
-                    subtitle:
-                        'Read prompts, patches, and run results in one feed.',
+                    title: '작업 로그',
+                    subtitle: '프롬프트, 패치, 실행 결과를 한 피드에서 읽습니다.',
                     child: widget.controller.threadEvents.isEmpty
                         ? Text(
-                            'No session events yet. Send the first request from the composer below to start the feed.',
+                            '아직 세션 이벤트가 없습니다. 아래 composer에서 첫 요청을 보내면 피드가 시작됩니다.',
                             style: Theme.of(context)
                                 .textTheme
                                 .bodyMedium
@@ -210,7 +209,7 @@ class _PromptScreenState extends State<PromptScreen> {
     }
     messenger.showSnackBar(
       SnackBar(
-        content: Text(error ?? 'PROMPT_SUBMIT done'),
+        content: Text(error ?? 'PROMPT_SUBMIT 완료'),
       ),
     );
   }
@@ -236,9 +235,8 @@ class _PromptScreenState extends State<PromptScreen> {
 
   Future<void> _showReviewSheet() async {
     await _showBottomSheet(
-      title: 'Review and Run',
-      subtitle:
-          'Keep patch review and run results attached to the live session flow.',
+      title: '패치와 실행',
+      subtitle: '패치 검토와 실행 결과를 세션 흐름에 붙여서 봅니다.',
       child: ReviewScreen(controller: widget.controller),
     );
   }
@@ -258,14 +256,14 @@ class _PromptScreenState extends State<PromptScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Context',
+                  '컨텍스트',
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         color: const Color(0xFFF4F7FB),
                       ),
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Keep the main surface clean and only attach the details you need here.',
+                  '메인 화면은 깔끔하게 두고 필요한 정보만 여기서 붙입니다.',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: const Color(0xFF93A4B7),
                         height: 1.4,
@@ -277,25 +275,25 @@ class _PromptScreenState extends State<PromptScreen> {
                   runSpacing: 8,
                   children: [
                     _ContextChip(
-                      label: 'Active File',
+                      label: '활성 파일',
                       value: _context['activeFile']!,
                       onChanged: (value) =>
                           setState(() => _context['activeFile'] = value),
                     ),
                     _ContextChip(
-                      label: 'Selection',
+                      label: '선택 영역',
                       value: _context['selection']!,
                       onChanged: (value) =>
                           setState(() => _context['selection'] = value),
                     ),
                     _ContextChip(
-                      label: 'Latest Error',
+                      label: '최근 오류',
                       value: _context['latestError']!,
                       onChanged: (value) =>
                           setState(() => _context['latestError'] = value),
                     ),
                     _ContextChip(
-                      label: 'Workspace Summary',
+                      label: '워크스페이스 요약',
                       value: _context['workspaceSummary']!,
                       onChanged: (value) => setState(
                         () => _context['workspaceSummary'] = value,
@@ -489,7 +487,7 @@ class _ComposerDock extends StatelessWidget {
                 ),
                 onChanged: onChanged,
                 decoration: InputDecoration(
-                  hintText: 'Plan, @ for context, / for commands',
+                  hintText: '계획, @ 컨텍스트, / 명령',
                   hintStyle: const TextStyle(color: Color(0xFF7D8EA2)),
                   filled: true,
                   fillColor: const Color(0xFF0A1016),
@@ -512,12 +510,12 @@ class _ComposerDock extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(vertical: 12),
                       ),
                       icon: const Icon(Icons.tune),
-                      label: Text('Context $selectedContextCount'),
+                      label: Text('컨텍스트 $selectedContextCount'),
                     ),
                   ),
                   const SizedBox(width: 8),
                   IconButton.outlined(
-                    tooltip: 'Clear draft',
+                    tooltip: '입력 지우기',
                     onPressed: onClear,
                     style: IconButton.styleFrom(
                       foregroundColor: const Color(0xFFDCE6F2),
@@ -537,7 +535,7 @@ class _ComposerDock extends StatelessWidget {
                       ),
                     ),
                     icon: const Icon(Icons.send_rounded),
-                    label: const Text('Send'),
+                    label: const Text('보내기'),
                   ),
                 ],
               ),
@@ -570,8 +568,8 @@ class _WorkstreamCard extends StatelessWidget {
     ]);
 
     return _SectionCard(
-      title: 'Current Work',
-      subtitle: 'Keep only the state you need in the main session feed.',
+      title: '현재 작업',
+      subtitle: '메인 세션 피드에는 필요한 상태만 남깁니다.',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -592,7 +590,7 @@ class _WorkstreamCard extends StatelessWidget {
           if (reasoning.isNotEmpty) ...[
             const SizedBox(height: 12),
             _StreamSurface(
-              label: 'Reasoning',
+              label: '판단 요약',
               child: Text(
                 reasoning,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -605,7 +603,7 @@ class _WorkstreamCard extends StatelessWidget {
           if (planItems.isNotEmpty) ...[
             const SizedBox(height: 12),
             _StreamSurface(
-              label: 'Plan',
+              label: '계획',
               child: _PlanTrace(items: planItems),
             ),
           ],
@@ -613,7 +611,7 @@ class _WorkstreamCard extends StatelessWidget {
               toolActivities.isNotEmpty) ...[
             const SizedBox(height: 12),
             _StreamSurface(
-              label: 'Tool Log',
+              label: '작업 로그',
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -621,7 +619,7 @@ class _WorkstreamCard extends StatelessWidget {
                       .trim()
                       .isNotEmpty)
                     Text(
-                      '${controller.liveSession.tools.currentLabel} / ${controller.liveSession.tools.currentStatus.isEmpty ? 'Working' : controller.liveSession.tools.currentStatus}',
+                      '${controller.liveSession.tools.currentLabel} / ${controller.liveSession.tools.currentStatus.isEmpty ? '진행 중' : controller.liveSession.tools.currentStatus}',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                             color: const Color(0xFFF4F7FB),
                             fontWeight: FontWeight.w600,
@@ -649,7 +647,7 @@ class _WorkstreamCard extends StatelessWidget {
           ],
           const SizedBox(height: 12),
           _StreamSurface(
-            label: 'Patch',
+            label: '패치',
             child: Text(
               controller.patchSummary.isNotEmpty
                   ? controller.patchSummary
@@ -664,13 +662,13 @@ class _WorkstreamCard extends StatelessWidget {
               controller.runStatus.isNotEmpty) ...[
             const SizedBox(height: 12),
             _StreamSurface(
-              label: 'Run',
+              label: '실행',
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     controller.runSummary.isEmpty
-                        ? 'No run results yet.'
+                        ? '아직 실행 결과가 없습니다.'
                         : controller.runSummary,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: const Color(0xFFDCE6F2),
@@ -697,7 +695,7 @@ class _WorkstreamCard extends StatelessWidget {
           if (controller.errorMessage != null) ...[
             const SizedBox(height: 12),
             _StreamSurface(
-              label: 'Last Error',
+              label: '최근 오류',
               accent: Theme.of(context).colorScheme.error,
               child: Text(
                 controller.errorMessage!,
@@ -719,7 +717,7 @@ class _WorkstreamCard extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: 14),
               ),
               icon: const Icon(Icons.rule_folder_outlined),
-              label: const Text('Open Review and Run'),
+              label: const Text('패치와 실행 열기'),
             ),
           ),
         ],
@@ -1393,7 +1391,7 @@ class _ThreadEventTile extends StatelessWidget {
                 if (event.data['fileCount'] != null)
                   _MetricPill(
                     icon: Icons.description_outlined,
-                    label: 'files ${event.data['fileCount']}',
+                    label: '파일 ${event.data['fileCount']}개',
                   ),
               ],
             ),

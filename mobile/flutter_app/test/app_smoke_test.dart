@@ -7,7 +7,7 @@ import 'package:vibedeck_mobile/services/agent_api.dart';
 import 'package:vibedeck_mobile/state/app_controller.dart';
 
 void main() {
-  testWidgets('shows drawer-based mobile shell flow', (tester) async {
+  testWidgets('드로어 기반 모바일 셸 흐름을 보여준다', (tester) async {
     await tester.binding.setSurfaceSize(const Size(800, 1200));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -17,37 +17,37 @@ void main() {
     await tester.pumpWidget(VibeDeckApp(controller: controller));
     await tester.pumpAndSettle();
 
-    expect(find.text('VibeDeck Mobile'), findsNothing);
-    expect(find.text('Auth middleware failure'), findsOneWidget);
-    expect(find.text('Current Work'), findsOneWidget);
-    expect(find.text('Activity Feed'), findsOneWidget);
-    expect(find.text('Send'), findsOneWidget);
+    expect(find.text('바이브덱 모바일'), findsNothing);
+    expect(find.text('인증 미들웨어 실패'), findsOneWidget);
+    expect(find.text('현재 작업'), findsOneWidget);
+    expect(find.text('작업 로그'), findsWidgets);
+    expect(find.text('보내기'), findsOneWidget);
 
     await tester.tap(find.byIcon(Icons.menu_rounded));
     await tester.pumpAndSettle();
 
-    expect(find.text('Search Sessions...'), findsOneWidget);
-    expect(find.text('New Agent'), findsOneWidget);
-    expect(find.text('Sessions'), findsWidgets);
-    expect(find.text('Files'), findsOneWidget);
-    expect(find.text('Settings'), findsOneWidget);
-    expect(find.text('Auth middleware failure'), findsWidgets);
+    expect(find.text('세션 검색...'), findsOneWidget);
+    expect(find.text('새 세션'), findsOneWidget);
+    expect(find.text('세션'), findsWidgets);
+    expect(find.text('파일'), findsOneWidget);
+    expect(find.text('설정'), findsOneWidget);
+    expect(find.text('인증 미들웨어 실패'), findsWidgets);
 
-    await tester.tap(find.text('Files'));
+    await tester.tap(find.text('파일'));
     await tester.pumpAndSettle();
 
     expect(find.text('README.md'), findsWidgets);
 
-    await tester.tap(find.text('Settings'));
+    await tester.tap(find.text('설정'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Open Session Center'), findsOneWidget);
-    expect(find.text('Open Terminal'), findsOneWidget);
+    expect(find.text('세션 센터 열기'), findsOneWidget);
+    expect(find.text('터미널 열기'), findsOneWidget);
 
-    await tester.tap(find.text('Open Session Center'));
+    await tester.tap(find.text('세션 센터 열기'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Session Center'), findsOneWidget);
+    expect(find.text('세션 센터'), findsOneWidget);
   });
 }
 
@@ -129,7 +129,7 @@ class _FakeShellAgentApi extends AgentApi {
       'profiles': const [
         {
           'id': 'test_all',
-          'label': 'Demo Check',
+          'label': '데모 점검',
           'command': 'git status --short',
           'scope': 'SMALL',
           'optional': false,
@@ -144,13 +144,12 @@ class _FakeShellAgentApi extends AgentApi {
       'threads': [
         {
           'id': 'thread-auth',
-          'title': 'Auth middleware failure',
+          'title': '인증 미들웨어 실패',
           'sessionId': 'session-auth',
           'state': 'running',
           'currentJobId': 'job-auth',
           'lastEventKind': 'assistant',
-          'lastEventText':
-              'Narrowing the failing auth path before changing code.',
+          'lastEventText': '코드 변경 전에 실패한 인증 경로를 먼저 좁히는 중입니다.',
           'updatedAt': 1710601200000,
         },
       ],
@@ -165,13 +164,12 @@ class _FakeShellAgentApi extends AgentApi {
     return {
       'thread': {
         'id': 'thread-auth',
-        'title': 'Auth middleware failure',
+        'title': '인증 미들웨어 실패',
         'sessionId': 'session-auth',
         'state': 'running',
         'currentJobId': 'job-auth',
         'lastEventKind': 'assistant',
-        'lastEventText':
-            'Narrowing the failing auth path before changing code.',
+        'lastEventText': '코드 변경 전에 실패한 인증 경로를 먼저 좁히는 중입니다.',
         'updatedAt': 1710601200000,
       },
       'events': [
@@ -181,9 +179,8 @@ class _FakeShellAgentApi extends AgentApi {
           'jobId': 'job-auth',
           'kind': 'user_prompt',
           'role': 'user',
-          'title': 'Prompt',
-          'body':
-              'Analyze the auth middleware failure and propose the smallest patch.',
+          'title': '요청',
+          'body': '인증 미들웨어 실패 원인을 분석하고 가장 작은 패치를 제안해줘.',
           'data': const <String, dynamic>{},
           'at': 1710601200000,
         },
@@ -193,50 +190,47 @@ class _FakeShellAgentApi extends AgentApi {
           'jobId': 'job-auth',
           'kind': 'assistant_summary',
           'role': 'assistant',
-          'title': 'Assistant',
-          'body':
-              'Checking the auth guard and recent failing test output first.',
+          'title': '어시스턴트',
+          'body': '먼저 인증 가드와 최근 실패 테스트 출력을 확인하고 있습니다.',
           'data': const <String, dynamic>{},
           'at': 1710601260000,
         },
       ],
       'liveState': {
         'composer': {
-          'draftText': 'Shared draft from Cursor',
+          'draftText': 'Cursor 공유 초안',
           'isTyping': true,
           'updatedAt': 1710601265000,
         },
         'focus': {
           'activeFilePath': 'README.md',
-          'selection': 'auth middleware',
+          'selection': '인증 미들웨어',
           'updatedAt': 1710601270000,
         },
         'activity': {
           'phase': 'analysis',
-          'summary':
-              'Diagnosing the auth middleware failure before editing code.',
+          'summary': '코드 수정 전에 인증 미들웨어 실패를 진단하는 중입니다.',
           'updatedAt': 1710601275000,
         },
         'reasoning': {
-          'title': 'Reasoning',
-          'summary':
-              'Confirm the failing auth path first so the patch only touches one middleware file.',
+          'title': '판단 요약',
+          'summary': '패치가 미들웨어 한 파일만 건드리도록 먼저 실패 경로를 확인합니다.',
           'sourceKind': 'manual',
           'updatedAt': 1710601280000,
         },
         'plan': {
-          'summary': 'Auth plan',
+          'summary': '인증 계획',
           'items': [
             {
               'id': 'inspect-test',
-              'label': 'Inspect the failing auth test',
+              'label': '실패한 인증 테스트 확인',
               'status': 'completed',
               'detail': '',
               'updatedAt': 1710601285000,
             },
             {
               'id': 'check-middleware',
-              'label': 'Check the auth middleware guard',
+              'label': '인증 미들웨어 가드 확인',
               'status': 'in_progress',
               'detail': '',
               'updatedAt': 1710601290000,
@@ -245,14 +239,14 @@ class _FakeShellAgentApi extends AgentApi {
           'updatedAt': 1710601290000,
         },
         'tools': {
-          'currentLabel': 'Search files',
+          'currentLabel': '파일 검색',
           'currentStatus': 'in_progress',
           'activities': [
             {
               'kind': 'search',
-              'label': 'Search files',
+              'label': '파일 검색',
               'status': 'in_progress',
-              'detail': 'Looking for auth middleware references',
+              'detail': '인증 미들웨어 참조를 찾는 중',
               'at': 1710601295000,
             },
           ],
@@ -261,9 +255,9 @@ class _FakeShellAgentApi extends AgentApi {
         'terminal': {
           'status': 'idle',
           'profileId': 'test_all',
-          'label': 'Demo Check',
+          'label': '데모 점검',
           'command': 'git status --short',
-          'summary': 'Waiting to run after patch review.',
+          'summary': '패치 검토 뒤 실행 대기 중입니다.',
           'excerpt': '',
           'output': '',
           'updatedAt': 1710601300000,
@@ -279,17 +273,16 @@ class _FakeShellAgentApi extends AgentApi {
       'operationState': {
         'currentJobId': 'job-auth',
         'phase': 'analysis',
-        'patchSummary':
-            'Patch is not ready yet. The agent is still narrowing the auth middleware change.',
+        'patchSummary': '패치는 아직 준비되지 않았습니다. 에이전트가 인증 미들웨어 변경 범위를 좁히는 중입니다.',
         'patchFileCount': 1,
         'patchFiles': ['mobile/flutter_app/lib/app.dart'],
         'patchResultStatus': '',
         'patchResultMessage': '',
         'runProfileId': 'test_all',
-        'runLabel': 'Demo Check',
+        'runLabel': '데모 점검',
         'runCommand': 'git status --short',
         'runStatus': '',
-        'runSummary': 'Waiting to run after patch review.',
+        'runSummary': '패치 검토 뒤 실행 대기 중입니다.',
         'runExcerpt': '',
         'runOutput': '',
         'runChangedFiles': ['README.md'],
