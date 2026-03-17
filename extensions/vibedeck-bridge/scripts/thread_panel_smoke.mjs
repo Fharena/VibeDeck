@@ -250,6 +250,8 @@ const agentBaseUrl = `http://127.0.0.1:${address.port}`;
 const messages = { info: [], warn: [], error: [] };
 const commandRegistry = new Map();
 const panelMessages = [];
+const activeEditorListeners = [];
+const selectionListeners = [];
 let panelMessageHandler = null;
 
 const fakePanel = {
@@ -287,6 +289,28 @@ const fakeVscode = {
   },
   window: {
     activeTextEditor: undefined,
+    onDidChangeActiveTextEditor(listener) {
+      activeEditorListeners.push(listener);
+      return {
+        dispose() {
+          const index = activeEditorListeners.indexOf(listener);
+          if (index >= 0) {
+            activeEditorListeners.splice(index, 1);
+          }
+        },
+      };
+    },
+    onDidChangeTextEditorSelection(listener) {
+      selectionListeners.push(listener);
+      return {
+        dispose() {
+          const index = selectionListeners.indexOf(listener);
+          if (index >= 0) {
+            selectionListeners.splice(index, 1);
+          }
+        },
+      };
+    },
     async showTextDocument() {
       return undefined;
     },
@@ -365,6 +389,19 @@ try {
   await waitFor(() => (panelMessages.at(-1)?.state?.currentJobId || "") === "job_panel_smoke");
   await waitFor(() => (panelMessages.at(-1)?.state?.live?.participants?.[0]?.participantId || "") === "cursor-panel");
 
+  fakeVscode.window.activeTextEditor = createEditor("src/live_sync.ts", {
+    start: { line: 4, character: 2 },
+    end: { line: 4, character: 9 },
+  });
+  for (const listener of activeEditorListeners) {
+    listener(fakeVscode.window.activeTextEditor);
+  }
+  for (const listener of selectionListeners) {
+    listener({ textEditor: fakeVscode.window.activeTextEditor });
+  }
+  await waitFor(() => (panelMessages.at(-1)?.state?.live?.focus?.activeFilePath || "") === "src/live_sync.ts");
+  await waitFor(() => (panelMessages.at(-1)?.state?.live?.workspace?.activeFilePath || "") === "src/live_sync.ts");
+
   await panelMessageHandler({ type: "update-draft", prompt: "shared smoke draft" });
   await waitFor(() => (panelMessages.at(-1)?.state?.live?.composer?.draftText || "") === "shared smoke draft");
 
@@ -391,6 +428,11 @@ try {
   assert.equal(latestStateMessage.state.derived.patchFiles[0].path, "notes.txt");
   assert.deepEqual(latestStateMessage.state.derived.currentJobFiles, ["notes.txt"]);
   assert.equal(latestStateMessage.state.live.participants[0].participantId, "cursor-panel");
+  assert.equal(latestStateMessage.state.live.focus.activeFilePath, "src/live_sync.ts");
+  assert.equal(latestStateMessage.state.live.focus.selection, "5:3 -> 5:10");
+  assert.equal(latestStateMessage.state.live.workspace.activeFilePath, "src/live_sync.ts");
+  assert.equal(latestStateMessage.state.live.workspace.rootPath, "C:/demo/workspace");
+  assert.deepEqual(latestStateMessage.state.live.workspace.patchFiles, ["notes.txt"]);
   assert.equal(latestStateMessage.state.live.composer.draftText, "shared smoke draft");
   assert.equal(state.envelopes.map((item) => item.type).join(","), "PROMPT_SUBMIT,PATCH_APPLY,RUN_PROFILE,OPEN_LOCATION");
   assert.equal(state.openLocations.length, 1);
@@ -398,6 +440,8 @@ try {
   console.log(JSON.stringify({
     agentBaseUrl,
     threadId: latestStateMessage.state.currentThread.id,
+    focusPath: latestStateMessage.state.live.focus.activeFilePath,
+    workspaceActivePath: latestStateMessage.state.live.workspace.activeFilePath,
     liveDraft: latestStateMessage.state.live.composer.draftText,
     runStatus: latestStateMessage.state.derived.runStatus,
     patchFiles: latestStateMessage.state.derived.patchFiles.map((item) => item.path),
@@ -457,6 +501,9 @@ function updateLiveState(detail, body) {
   if (body.activity) {
     detail.liveState.activity = body.activity;
   }
+  if (body.workspace) {
+    detail.liveState.workspace = body.workspace;
+  }
 }
 
 function writeSessionEvent(res, detail) {
@@ -479,6 +526,16 @@ function findDetailByThreadId(threadId) {
     }
   }
   throw new Error(`thread not found: ${threadId}`);
+}
+
+function createEditor(path, selection) {
+  return {
+    document: {
+      fileName: path,
+      uri: { fsPath: path },
+    },
+    selection,
+  };
 }
 async function readJson(req) {
   let body = "";
