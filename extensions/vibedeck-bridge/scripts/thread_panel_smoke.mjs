@@ -159,7 +159,7 @@ const server = http.createServer(async (req, res) => {
         ],
       };
       state.threads = [detail.thread];
-      state.details.set(threadId, detail);
+      state.details.set(detail.thread.sessionId, detail);
       return json(res, 200, {
         responses: [
           { type: "PROMPT_ACK", payload: { threadId, jobId } },
@@ -168,7 +168,7 @@ const server = http.createServer(async (req, res) => {
       });
     }
     if (body.type === "PATCH_APPLY") {
-      const detail = state.details.get("thread_panel_smoke");
+      const detail = findDetailByThreadId("thread_panel_smoke");
       detail.thread.state = "failed";
       detail.thread.lastEventKind = "patch_applied";
       detail.operationState.phase = "waiting_input";
@@ -197,7 +197,7 @@ const server = http.createServer(async (req, res) => {
       });
     }
     if (body.type === "RUN_PROFILE") {
-      const detail = state.details.get("thread_panel_smoke");
+      const detail = findDetailByThreadId("thread_panel_smoke");
       detail.thread.state = "passed";
       detail.thread.lastEventKind = "run_finished";
       detail.operationState.phase = "waiting_input";
@@ -465,11 +465,20 @@ function writeSessionEvent(res, detail) {
 
 function broadcastSession(detail) {
   for (const [res, sessionId] of streamClients.entries()) {
-    if (sessionId !== detail.thread.id) {
+    if (sessionId !== detail.thread.sessionId) {
       continue;
     }
     writeSessionEvent(res, detail);
   }
+}
+
+function findDetailByThreadId(threadId) {
+  for (const detail of state.details.values()) {
+    if (detail.thread.id === threadId) {
+      return detail;
+    }
+  }
+  throw new Error(`thread not found: ${threadId}`);
 }
 async function readJson(req) {
   let body = "";

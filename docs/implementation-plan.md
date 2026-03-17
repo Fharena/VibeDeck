@@ -186,6 +186,10 @@
   - workstream 카드 안에 `검토와 실행` 표면을 추가해 패치 요약, 상세 검토, 기본 실행 프로파일 액션을 메인 피드에서 바로 처리하도록 정리
   - 패치/실행을 별도 review sheet 전용 흐름으로만 두지 않고, 메인 피드에서 다음 행동이 바로 보이도록 조정
   - 검증: flutter analyze 통과, 안전 경로 app_smoke_test 통과
+- 2026-03-17 / Cursor 패널 세션 동기화 보정
+  - Cursor 패널에서 thread 선택 상태와 session API 호출을 분리해 detail 조회, live state publish, session stream이 session id 기준으로 흐르도록 정리
+  - panel smoke fixture도 `/sessions/{sessionId}` 기준으로 맞춰 공유 세션 경로 검증이 thread id fallback에 묶이지 않도록 보정
+  - 검증: `npm --prefix extensions/vibedeck-bridge run build`, `npm --prefix extensions/vibedeck-bridge run smoke:panel` 통과
 
 ## 다음 작업 우선순위
 

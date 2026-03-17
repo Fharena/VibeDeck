@@ -147,7 +147,7 @@ class DefaultThreadPanelController implements ThreadPanelController {
   private refreshTimer: NodeJS.Timeout | undefined;
   private refreshInFlight: Promise<void> | undefined;
   private sessionStream: DisposableLike | undefined;
-  private sessionStreamThreadId = "";
+  private sessionStreamSessionId = "";
   private selectedThreadId = "";
   private composeMode = false;
   private lastState: ThreadPanelViewState | undefined;
@@ -249,8 +249,9 @@ class DefaultThreadPanelController implements ThreadPanelController {
         this.selectedThreadId = threads[0].id;
       }
 
-      const detail = this.selectedThreadId
-        ? await this.api.sessionDetail(settings.agentBaseUrl, this.selectedThreadId)
+      const selectedSessionId = this.resolveSessionID(this.selectedThreadId, threads);
+      const detail = selectedSessionId
+        ? await this.api.sessionDetail(settings.agentBaseUrl, selectedSessionId)
         : undefined;
       if (detail?.thread.id) {
         this.selectedThreadId = detail.thread.id;
@@ -272,7 +273,7 @@ class DefaultThreadPanelController implements ThreadPanelController {
       this.updatePanelTitle(state);
       await panel.webview.postMessage({ type: "state", state });
       if (detail && !this.composeMode) {
-        this.restartSessionStream(settings.agentBaseUrl, detail.thread.id);
+        this.restartSessionStream(settings.agentBaseUrl, detail.thread.sessionId);
         void this.publishSessionPresence(settings.agentBaseUrl, detail, state);
       } else {
         this.stopSessionStream();
@@ -300,9 +301,9 @@ class DefaultThreadPanelController implements ThreadPanelController {
           await this.refresh();
           return;
         case "new-thread": {
-          const previousThreadId = this.currentThreadID();
-          if (previousThreadId) {
-            await this.clearSessionComposer(this.readSettings().agentBaseUrl, previousThreadId);
+          const previousSessionId = this.currentSessionID();
+          if (previousSessionId) {
+            await this.clearSessionComposer(this.readSettings().agentBaseUrl, previousSessionId);
           }
           this.composeMode = true;
           this.selectedThreadId = "";
@@ -313,10 +314,10 @@ class DefaultThreadPanelController implements ThreadPanelController {
           return;
         }
         case "select-thread": {
-          const previousThreadId = this.currentThreadID();
+          const previousSessionId = this.currentSessionID();
           const nextThreadId = text(message.threadId);
-          if (previousThreadId && previousThreadId !== nextThreadId) {
-            await this.clearSessionComposer(this.readSettings().agentBaseUrl, previousThreadId);
+          if (previousSessionId && this.currentThreadID() !== nextThreadId) {
+            await this.clearSessionComposer(this.readSettings().agentBaseUrl, previousSessionId);
           }
           this.composeMode = false;
           this.selectedThreadId = nextThreadId;
@@ -366,11 +367,13 @@ class DefaultThreadPanelController implements ThreadPanelController {
     });
 
     this.lastErrorMessage = "";
+    const wasComposeMode = this.composeMode;
     const responses = await this.sendEnvelopeAndRecover(settings.agentBaseUrl, envelope);
     this.applyEnvelopeResponses(responses);
     this.composeMode = false;
-    if (this.selectedThreadId) {
-      await this.clearSessionComposer(settings.agentBaseUrl, this.selectedThreadId);
+    const sessionId = !wasComposeMode ? this.currentSessionID() : "";
+    if (sessionId) {
+      await this.clearSessionComposer(settings.agentBaseUrl, sessionId);
     }
     if (!this.lastErrorMessage) {
       this.lastStatusMessage = "프롬프트를 전송했습니다.";
@@ -475,13 +478,13 @@ class DefaultThreadPanelController implements ThreadPanelController {
     if (this.composeMode) {
       return;
     }
-    const threadId = this.currentThreadID();
-    if (!threadId) {
+    const sessionId = this.currentSessionID();
+    if (!sessionId) {
       return;
     }
 
     const settings = this.readSettings();
-    await this.publishSessionLiveState(settings.agentBaseUrl, threadId, {
+    await this.publishSessionLiveState(settings.agentBaseUrl, sessionId, {
       composer: {
         draftText: prompt,
         isTyping: prompt.trim().length > 0,
@@ -495,31 +498,52 @@ class DefaultThreadPanelController implements ThreadPanelController {
   }
 
   private currentSessionID(): string {
-    return this.lastState?.currentThread?.sessionId || "sid-vibedeck-panel";
+    return (
+      this.resolveSessionID(this.currentThreadID(), this.lastState?.threads ?? []) ||
+      this.lastState?.currentThread?.sessionId ||
+      "sid-vibedeck-panel"
+    );
   }
 
-  private restartSessionStream(baseUrl: string, threadId: string): void {
+  private resolveSessionID(
+    threadId: string,
+    threads: AgentPanelThreadSummary[],
+  ): string {
     if (!threadId) {
+      return "";
+    }
+    const selected = threads.find((thread) => thread.id === threadId);
+    if (selected?.sessionId) {
+      return selected.sessionId;
+    }
+    if (this.lastState?.currentThread?.id === threadId) {
+      return this.lastState.currentThread.sessionId || "";
+    }
+    return "";
+  }
+
+  private restartSessionStream(baseUrl: string, sessionId: string): void {
+    if (!sessionId) {
       this.stopSessionStream();
       return;
     }
     if (
       this.sessionStream &&
-      this.sessionStreamThreadId === threadId
+      this.sessionStreamSessionId === sessionId
     ) {
       return;
     }
 
     this.stopSessionStream();
-    this.sessionStreamThreadId = threadId;
+    this.sessionStreamSessionId = sessionId;
     this.sessionStream = this.api.subscribeSession(
       baseUrl,
-      threadId,
+      sessionId,
       (detail) => {
         this.applySessionSnapshot(detail);
       },
       () => {
-        if (this.sessionStreamThreadId !== threadId) {
+        if (this.sessionStreamSessionId !== sessionId) {
           return;
         }
         this.stopSessionStream();
@@ -528,7 +552,7 @@ class DefaultThreadPanelController implements ThreadPanelController {
   }
 
   private stopSessionStream(): void {
-    this.sessionStreamThreadId = "";
+    this.sessionStreamSessionId = "";
     this.sessionStream?.dispose();
     this.sessionStream = undefined;
   }
@@ -597,11 +621,11 @@ class DefaultThreadPanelController implements ThreadPanelController {
       update.focus = focus;
     }
 
-    await this.publishSessionLiveState(baseUrl, detail.thread.id, update);
+    await this.publishSessionLiveState(baseUrl, detail.thread.sessionId, update);
   }
 
-  private async clearSessionComposer(baseUrl: string, threadId: string): Promise<void> {
-    await this.publishSessionLiveState(baseUrl, threadId, {
+  private async clearSessionComposer(baseUrl: string, sessionId: string): Promise<void> {
+    await this.publishSessionLiveState(baseUrl, sessionId, {
       composer: {
         draftText: "",
         isTyping: false,
@@ -612,13 +636,13 @@ class DefaultThreadPanelController implements ThreadPanelController {
 
   private async publishSessionLiveState(
     baseUrl: string,
-    threadId: string,
+    sessionId: string,
     update: Record<string, unknown>,
   ): Promise<void> {
-    if (!threadId) {
+    if (!sessionId) {
       return;
     }
-    const detail = await this.api.updateSessionLiveState(baseUrl, threadId, update);
+    const detail = await this.api.updateSessionLiveState(baseUrl, sessionId, update);
     this.applySessionSnapshot(detail);
   }
 
