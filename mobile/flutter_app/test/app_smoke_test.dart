@@ -21,6 +21,10 @@ void main() {
     expect(find.text('바이브덱 모바일'), findsNothing);
     expect(find.text('인증 미들웨어 실패'), findsOneWidget);
     expect(find.text('현재 작업'), findsOneWidget);
+    expect(find.text('검토와 실행'), findsOneWidget);
+    expect(find.text('패치 검토'), findsOneWidget);
+    expect(find.text('실행 확인'), findsOneWidget);
+    expect(find.text('데모 점검 실행'), findsOneWidget);
     expect(find.text('작업 로그'), findsWidgets);
     expect(find.text('보내기'), findsOneWidget);
 
