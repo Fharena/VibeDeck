@@ -145,6 +145,8 @@ class _PromptScreenState extends State<PromptScreen> {
                   _WorkstreamCard(
                     controller: widget.controller,
                     onOpenReview: _showReviewSheet,
+                    onApplyAllPatch: _applyAllPatchFromFeed,
+                    onRunPrimaryProfile: _runPrimaryProfileFromFeed,
                   ),
                   const SizedBox(height: 14),
                   _SectionCard(
@@ -210,6 +212,52 @@ class _PromptScreenState extends State<PromptScreen> {
     messenger.showSnackBar(
       SnackBar(
         content: Text(error ?? 'PROMPT_SUBMIT 완료'),
+      ),
+    );
+  }
+
+  Future<void> _applyAllPatchFromFeed() async {
+    await widget.controller.applyPatch(
+      applyAll: true,
+      selectedByPath: const {},
+    );
+    if (!mounted) {
+      return;
+    }
+    _showControllerSnack(
+      widget.controller.patchResultStatus.isNotEmpty
+          ? 'PATCH_RESULT: ${widget.controller.patchResultStatus} / ${widget.controller.patchResultMessage}'
+          : '패치 적용 요청을 보냈습니다.',
+    );
+  }
+
+  Future<void> _runPrimaryProfileFromFeed() async {
+    final profiles = widget.controller.runProfiles;
+    if (profiles.isEmpty) {
+      if (!mounted) {
+        return;
+      }
+      _showControllerSnack('실행 가능한 프로파일이 아직 없습니다.');
+      return;
+    }
+
+    final profile = profiles.first;
+    await widget.controller.runProfile(profile.id);
+    if (!mounted) {
+      return;
+    }
+    _showControllerSnack(
+      widget.controller.runStatus.isNotEmpty || widget.controller.runSummary.isNotEmpty
+          ? 'RUN_RESULT: ${widget.controller.runStatus} / ${widget.controller.runSummary}'
+          : '${profile.displayLabel} 실행 요청을 보냈습니다.',
+    );
+  }
+
+  void _showControllerSnack(String fallback) {
+    final error = widget.controller.errorMessage?.trim() ?? '';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(error.isNotEmpty ? error : fallback),
       ),
     );
   }
@@ -551,10 +599,14 @@ class _WorkstreamCard extends StatelessWidget {
   const _WorkstreamCard({
     required this.controller,
     required this.onOpenReview,
+    required this.onApplyAllPatch,
+    required this.onRunPrimaryProfile,
   });
 
   final AppController controller;
   final VoidCallback onOpenReview;
+  final Future<void> Function() onApplyAllPatch;
+  final Future<void> Function() onRunPrimaryProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -562,10 +614,34 @@ class _WorkstreamCard extends StatelessWidget {
     final planItems = controller.liveSession.plan.items.take(4).toList();
     final toolActivities =
         controller.liveSession.tools.activities.reversed.take(3).toList();
+    final primaryProfile =
+        controller.runProfiles.isEmpty ? null : controller.runProfiles.first;
+    final primaryProfileLabel = primaryProfile == null
+        ? ''
+        : (primaryProfile.label.trim().isNotEmpty
+            ? primaryProfile.label.trim()
+            : primaryProfile.id);
     final activeFile = _firstNonEmptyText([
       controller.liveSession.focus.activeFilePath,
       controller.liveSession.workspace.activeFilePath,
     ]);
+    final patchPreviewPaths = _dedupeNonEmptyPaths([
+      ...controller.patchFiles.map((file) => file.path),
+      ...controller.liveSession.workspace.patchFiles,
+    ]);
+    final reviewFilePaths = _dedupeNonEmptyPaths([
+      ...patchPreviewPaths,
+      ...controller.currentJobFiles,
+      ...controller.liveSession.workspace.changedFiles,
+    ]);
+    final patchSummary = controller.patchSummary.isNotEmpty
+        ? controller.patchSummary
+        : controller.patchAvailabilityReason;
+    final runSummary = controller.runSummary.isNotEmpty
+        ? controller.runSummary
+        : (primaryProfile == null
+            ? '실행 가능한 프로파일이 아직 없습니다.'
+            : '패치 검토 뒤 실행 대기 중입니다.');
 
     return _SectionCard(
       title: '현재 작업',
@@ -647,51 +723,69 @@ class _WorkstreamCard extends StatelessWidget {
           ],
           const SizedBox(height: 12),
           _StreamSurface(
-            label: '패치',
-            child: Text(
-              controller.patchSummary.isNotEmpty
-                  ? controller.patchSummary
-                  : controller.patchAvailabilityReason,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFFDCE6F2),
-                    height: 1.45,
-                  ),
+            label: '검토와 실행',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    if ((controller.currentJobId ?? '').trim().isNotEmpty)
+                      _MetricPill(
+                        icon: Icons.work_outline_rounded,
+                        label: controller.currentJobId!,
+                        tone: const Color(0xFF4E8DFF),
+                      ),
+                    if (patchPreviewPaths.isNotEmpty)
+                      _MetricPill(
+                        icon: Icons.edit_note_outlined,
+                        label: '패치 ${patchPreviewPaths.length}개',
+                        tone: const Color(0xFFE4B15A),
+                      ),
+                    if (primaryProfile != null)
+                      _MetricPill(
+                        icon: Icons.play_circle_outline,
+                        label: primaryProfileLabel,
+                        tone: const Color(0xFF2E9D78),
+                      ),
+                    if (controller.runStatus.isNotEmpty)
+                      _MetricPill(
+                        icon: Icons.bolt_outlined,
+                        label: controller.runStatus,
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                _InlineActionCard(
+                  title: '패치 검토',
+                  summary: patchSummary,
+                  previewPaths: reviewFilePaths.take(3).toList(),
+                  primaryActionLabel:
+                      controller.canApplyAllPatch ? '전체 적용' : null,
+                  onPrimaryAction:
+                      controller.canApplyAllPatch ? onApplyAllPatch : null,
+                  secondaryActionLabel: '상세 검토',
+                  onSecondaryAction: onOpenReview,
+                ),
+                const SizedBox(height: 10),
+                _InlineActionCard(
+                  title: '실행 확인',
+                  summary: runSummary,
+                  previewPaths: controller.topErrors.isNotEmpty
+                      ? controller.topErrors.take(2).toList()
+                      : controller.currentJobFiles.take(3).toList(),
+                  primaryActionLabel: primaryProfile == null
+                      ? null
+                      : '$primaryProfileLabel 실행',
+                  onPrimaryAction:
+                      primaryProfile == null ? null : onRunPrimaryProfile,
+                  secondaryActionLabel: '상세 검토',
+                  onSecondaryAction: onOpenReview,
+                ),
+              ],
             ),
           ),
-          if (controller.runSummary.isNotEmpty ||
-              controller.runStatus.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            _StreamSurface(
-              label: '실행',
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    controller.runSummary.isEmpty
-                        ? '아직 실행 결과가 없습니다.'
-                        : controller.runSummary,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: const Color(0xFFDCE6F2),
-                          height: 1.45,
-                        ),
-                  ),
-                  if (controller.topErrors.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    ...controller.topErrors.take(2).map(
-                          (line) => Text(
-                            '- $line',
-                            style:
-                                Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color: const Color(0xFFB7C4D2),
-                                      height: 1.35,
-                                    ),
-                          ),
-                        ),
-                  ],
-                ],
-              ),
-            ),
-          ],
           if (controller.errorMessage != null) ...[
             const SizedBox(height: 12),
             _StreamSurface(
@@ -706,20 +800,6 @@ class _WorkstreamCard extends StatelessWidget {
               ),
             ),
           ],
-          const SizedBox(height: 14),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.tonalIcon(
-              onPressed: onOpenReview,
-              style: FilledButton.styleFrom(
-                foregroundColor: const Color(0xFFF4F7FB),
-                backgroundColor: const Color(0xFF213244),
-                padding: const EdgeInsets.symmetric(vertical: 14),
-              ),
-              icon: const Icon(Icons.rule_folder_outlined),
-              label: const Text('패치와 실행 열기'),
-            ),
-          ),
         ],
       ),
     );
@@ -1231,6 +1311,107 @@ class _StreamSurface extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           child,
+        ],
+      ),
+    );
+  }
+}
+
+class _InlineActionCard extends StatelessWidget {
+  const _InlineActionCard({
+    required this.title,
+    required this.summary,
+    required this.previewPaths,
+    this.primaryActionLabel,
+    this.onPrimaryAction,
+    required this.secondaryActionLabel,
+    required this.onSecondaryAction,
+  });
+
+  final String title;
+  final String summary;
+  final List<String> previewPaths;
+  final String? primaryActionLabel;
+  final Future<void> Function()? onPrimaryAction;
+  final String secondaryActionLabel;
+  final VoidCallback onSecondaryAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0A1016),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFF202A35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  color: const Color(0xFFF4F7FB),
+                ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            summary,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: const Color(0xFFDCE6F2),
+                  height: 1.45,
+                ),
+          ),
+          if (previewPaths.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            ...previewPaths.map(
+              (item) => Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(
+                  '- $item',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: const Color(0xFFB7C4D2),
+                        height: 1.35,
+                      ),
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              FilledButton.tonalIcon(
+                onPressed: onSecondaryAction,
+                style: FilledButton.styleFrom(
+                  foregroundColor: const Color(0xFFF4F7FB),
+                  backgroundColor: const Color(0xFF213244),
+                ),
+                icon: const Icon(Icons.rule_folder_outlined),
+                label: Text(secondaryActionLabel),
+              ),
+              if (primaryActionLabel != null)
+                OutlinedButton.icon(
+                  onPressed: onPrimaryAction == null
+                      ? null
+                      : () async {
+                          await onPrimaryAction!();
+                        },
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFFDCE6F2),
+                    side: const BorderSide(color: Color(0xFF32404D)),
+                  ),
+                  icon: Icon(
+                    title == '패치 검토'
+                        ? Icons.done_all_rounded
+                        : Icons.play_arrow_rounded,
+                  ),
+                  label: Text(primaryActionLabel!),
+                ),
+            ],
+          ),
         ],
       ),
     );

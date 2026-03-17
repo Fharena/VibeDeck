@@ -182,12 +182,16 @@
   - 모바일에서 파일 내용을 바로 미리보고, 필요한 경우 간단 편집과 저장까지 할 수 있는 시트를 추가
   - shared session live update가 thread id fallback으로 흐르지 않도록 session id 우선 경로를 보정
   - 검증: go test ./internal/agent -run Workspace 통과, flutter analyze 통과, 안전 경로 app_smoke_test 통과
+- 2026-03-17 / 메인 피드 inline review 정리
+  - workstream 카드 안에 `검토와 실행` 표면을 추가해 패치 요약, 상세 검토, 기본 실행 프로파일 액션을 메인 피드에서 바로 처리하도록 정리
+  - 패치/실행을 별도 review sheet 전용 흐름으로만 두지 않고, 메인 피드에서 다음 행동이 바로 보이도록 조정
+  - 검증: flutter analyze 통과, 안전 경로 app_smoke_test 통과
 
 ## 다음 작업 우선순위
 
 1. 세션 UX 기반 정리
    - 판단 요약 / 계획 흐름 / 도구 활동 스키마를 live sync 품질 기준으로 정교화
-   - inline review / patch-run card를 메인 피드 중심으로 정리
+   - inline review 이후 상세 diff 선택/적용 UX를 더 줄이고 메인 피드와 연결 강화
    - 터미널 live state 및 이벤트 스키마를 IDE/mobile 양쪽에서 동일하게 다듬기
 2. Cursor 패널 재구성
    - panel을 `채팅 + 작업 로그 + 터미널 + 파일 트리` 중심 레이아웃으로 개편
