@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vibedeck_mobile/app.dart';
 import 'package:vibedeck_mobile/services/agent_api.dart';
+import 'package:vibedeck_mobile/screens/workspace_browser.dart';
 import 'package:vibedeck_mobile/state/app_controller.dart';
 
 void main() {
@@ -49,9 +50,52 @@ void main() {
 
     expect(find.text('세션 센터'), findsOneWidget);
   });
+
+  testWidgets('파일 미리보기와 저장 흐름을 보여준다', (tester) async {
+    final api = _FakeShellAgentApi();
+    final controller = AppController(api: api);
+
+    await controller.initialize();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: WorkspaceFileSheet(
+            controller: controller,
+            path: 'README.md',
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Cursor에서 열기'), findsOneWidget);
+    expect(find.textContaining('# 데모 작업공간'), findsOneWidget);
+
+    final saved = await controller.saveWorkspaceFile(
+      'README.md',
+      '# 데모 작업공간\n\n모바일에서 바로 수정한 내용입니다.\n',
+    );
+    await tester.pumpAndSettle();
+
+    expect(saved.content, contains('모바일에서 바로 수정한 내용'));
+    expect(controller.workspaceFile.content, contains('모바일에서 바로 수정한 내용'));
+    expect(api.lastSessionUpdateId, 'session-auth');
+
+    controller.dispose();
+    await tester.pump();
+  });
 }
 
 class _FakeShellAgentApi extends AgentApi {
+  _FakeShellAgentApi();
+
+  final Map<String, String> _workspaceFiles = {
+    'README.md': '# 데모 작업공간\n\n초기 안내 문서입니다.\n',
+    'reports/demo.md': '작업 로그 초안\n',
+  };
+  String? lastSessionUpdateId;
+
   @override
   Future<Map<String, dynamic>> bootstrap(String baseUrl) async {
     return {
@@ -307,6 +351,7 @@ class _FakeShellAgentApi extends AgentApi {
     String sessionId,
     Map<String, dynamic> update,
   ) async {
+    lastSessionUpdateId = sessionId;
     return sessionDetail(baseUrl, sessionId);
   }
 
@@ -318,6 +363,76 @@ class _FakeShellAgentApi extends AgentApi {
   @override
   Future<Map<String, dynamic>> threadDetail(String baseUrl, String threadId) {
     return sessionDetail(baseUrl, threadId);
+  }
+
+  @override
+  Future<Map<String, dynamic>> workspaceTree(
+    String baseUrl, {
+    String path = '',
+    String? sessionId,
+  }) async {
+    if (path == 'reports') {
+      return {
+        'rootPath': 'C:/demo/workspace',
+        'path': 'reports',
+        'entries': [
+          {
+            'name': 'demo.md',
+            'path': 'reports/demo.md',
+            'isDir': false,
+            'gitStatus': 'U',
+            'isChanged': true,
+          },
+        ],
+      };
+    }
+
+    return {
+      'rootPath': 'C:/demo/workspace',
+      'path': '',
+      'entries': [
+        {
+          'name': 'reports',
+          'path': 'reports',
+          'isDir': true,
+        },
+        {
+          'name': 'README.md',
+          'path': 'README.md',
+          'isDir': false,
+          'gitStatus': 'M',
+          'isActive': true,
+          'isChanged': true,
+        },
+      ],
+    };
+  }
+
+  @override
+  Future<Map<String, dynamic>> workspaceFile(
+    String baseUrl,
+    String path,
+  ) async {
+    final normalized = path.trim();
+    return {
+      'path': normalized,
+      'content': _workspaceFiles[normalized] ?? '',
+      'gitStatus': normalized == 'README.md' ? 'M' : 'U',
+      'sizeBytes': (_workspaceFiles[normalized] ?? '').length,
+      'updatedAt': 1710601305000,
+      'isWritable': true,
+    };
+  }
+
+  @override
+  Future<Map<String, dynamic>> saveWorkspaceFile(
+    String baseUrl,
+    String path,
+    String content,
+  ) async {
+    final normalized = path.trim();
+    _workspaceFiles[normalized] = content;
+    return workspaceFile(baseUrl, normalized);
   }
 
   @override

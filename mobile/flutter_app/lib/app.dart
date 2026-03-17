@@ -4,17 +4,10 @@ import 'package:flutter/material.dart';
 
 import 'screens/prompt_screen.dart';
 import 'screens/status_screen.dart';
+import 'screens/workspace_browser.dart';
 import 'services/app_settings_store.dart';
 import 'services/bootstrap_link_source.dart';
 import 'state/app_controller.dart';
-
-String _compactPath(String value, {int keep = 34}) {
-  final trimmed = value.trim();
-  if (trimmed.length <= keep) {
-    return trimmed;
-  }
-  return '...${trimmed.substring(trimmed.length - keep)}';
-}
 
 String _firstNonEmptyText(Iterable<String> values, {String fallback = ''}) {
   for (final value in values) {
@@ -25,7 +18,6 @@ String _firstNonEmptyText(Iterable<String> values, {String fallback = ''}) {
   }
   return fallback;
 }
-
 class VibeDeckApp extends StatelessWidget {
   const VibeDeckApp({
     super.key,
@@ -78,7 +70,6 @@ class VibeDeckApp extends StatelessWidget {
     );
   }
 }
-
 class MobileShell extends StatefulWidget {
   const MobileShell({
     super.key,
@@ -179,6 +170,17 @@ class _MobileShellState extends State<MobileShell> {
                 title: '파일 포커스',
                 subtitle: '현재 세션의 포커스, 변경 파일, 패치 파일을 한 번에 봅니다.',
                 child: FileFocusSheet(controller: _controller),
+              );
+            },
+            onInspectWorkspaceFile: (path) async {
+              Navigator.of(context).pop();
+              await _showBottomSheet(
+                title: '파일 미리보기',
+                subtitle: '작업 파일을 확인하고 필요한 경우 바로 수정합니다.',
+                child: WorkspaceFileSheet(
+                  controller: _controller,
+                  path: path,
+                ),
               );
             },
           ),
@@ -345,6 +347,7 @@ class _ShellDrawer extends StatefulWidget {
     required this.onOpenStatus,
     required this.onOpenTerminal,
     required this.onOpenFiles,
+    required this.onInspectWorkspaceFile,
   });
 
   final AppController controller;
@@ -353,6 +356,7 @@ class _ShellDrawer extends StatefulWidget {
   final VoidCallback onOpenStatus;
   final VoidCallback onOpenTerminal;
   final VoidCallback onOpenFiles;
+  final ValueChanged<String> onInspectWorkspaceFile;
 
   @override
   State<_ShellDrawer> createState() => _ShellDrawerState();
@@ -369,8 +373,6 @@ class _ShellDrawerState extends State<_ShellDrawer> {
 
   @override
   Widget build(BuildContext context) {
-    final workspaceFiles = _buildWorkspaceEntries(widget.controller);
-
     return Drawer(
       backgroundColor: const Color(0xFF090D11),
       child: SafeArea(
@@ -451,8 +453,7 @@ class _ShellDrawerState extends State<_ShellDrawer> {
                     ),
                     _FilesDrawerTab(
                       controller: widget.controller,
-                      files: workspaceFiles,
-                      onOpenFiles: widget.onOpenFiles,
+                      onInspectFile: widget.onInspectWorkspaceFile,
                     ),
                     _SettingsDrawerTab(
                       controller: widget.controller,
@@ -623,53 +624,17 @@ class _SessionDrawerTab extends StatelessWidget {
 class _FilesDrawerTab extends StatelessWidget {
   const _FilesDrawerTab({
     required this.controller,
-    required this.files,
-    required this.onOpenFiles,
+    required this.onInspectFile,
   });
 
   final AppController controller;
-  final List<_WorkspaceFileEntry> files;
-  final VoidCallback onOpenFiles;
+  final ValueChanged<String> onInspectFile;
 
   @override
   Widget build(BuildContext context) {
-    final rootPath = _firstNonEmptyText([
-      controller.liveSession.workspace.rootPath,
-      controller.adapterRuntime.workspaceRoot,
-    ]);
-
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
-      children: [
-        Text(
-          '파일',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: const Color(0xFFF4F7FB),
-              ),
-        ),
-        const SizedBox(height: 10),
-        if (rootPath.isNotEmpty)
-          Text(
-            _compactPath(rootPath, keep: 48),
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: const Color(0xFF8FA0B3),
-                ),
-          ),
-        const SizedBox(height: 12),
-        if (files.isEmpty)
-          Text(
-            '아직 파일 포커스가 없습니다. 패치나 실행이 생기면 이 세션이 보고 있는 파일이 여기에 표시됩니다.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: const Color(0xFF9FB0C0),
-                  height: 1.45,
-                ),
-          )
-        else
-          ..._buildFileTree(
-            files: files,
-            onOpenFiles: onOpenFiles,
-          ),
-      ],
+    return WorkspaceDrawerTab(
+      controller: controller,
+      onInspectFile: onInspectFile,
     );
   }
 }
@@ -834,296 +799,4 @@ class _DrawerBadge extends StatelessWidget {
       ),
     );
   }
-}
-
-class _WorkspaceFileEntry {
-  const _WorkspaceFileEntry({
-    required this.path,
-    this.isActive = false,
-    this.isChanged = false,
-    this.isPatch = false,
-    this.hasError = false,
-  });
-
-  final String path;
-  final bool isActive;
-  final bool isChanged;
-  final bool isPatch;
-  final bool hasError;
-}
-
-class _WorkspaceTreeNode {
-  _WorkspaceTreeNode({
-    required this.name,
-    required this.path,
-    required this.isFile,
-  });
-
-  final String name;
-  final String path;
-  final bool isFile;
-  _WorkspaceFileEntry? file;
-  final Map<String, _WorkspaceTreeNode> children =
-      <String, _WorkspaceTreeNode>{};
-}
-
-List<_WorkspaceFileEntry> _buildWorkspaceEntries(AppController controller) {
-  final activePath = _firstNonEmptyText([
-    controller.liveSession.focus.activeFilePath,
-    controller.liveSession.workspace.activeFilePath,
-  ]);
-  final runErrorPath = controller.liveSession.focus.runErrorPath.trim();
-  final changedFiles = <String>{
-    ...controller.liveSession.workspace.changedFiles,
-    ...controller.runChangedFiles,
-    ...controller.currentJobFiles,
-  };
-  final patchFiles = <String>{
-    ...controller.liveSession.workspace.patchFiles,
-    ...controller.patchFiles.map((file) => file.path),
-  };
-  final allPaths = <String>{
-    if (activePath.isNotEmpty) activePath,
-    if (runErrorPath.isNotEmpty) runErrorPath,
-    ...changedFiles.where((path) => path.trim().isNotEmpty),
-    ...patchFiles.where((path) => path.trim().isNotEmpty),
-  }.toList()
-    ..sort();
-
-  return allPaths
-      .map(
-        (path) => _WorkspaceFileEntry(
-          path: path,
-          isActive: path == activePath,
-          isChanged: changedFiles.contains(path),
-          isPatch: patchFiles.contains(path),
-          hasError: path == runErrorPath,
-        ),
-      )
-      .toList()
-    ..sort((left, right) {
-      final leftScore = (left.isActive ? 0 : 10) +
-          (left.hasError ? 0 : 5) +
-          (left.isChanged ? 0 : 2);
-      final rightScore = (right.isActive ? 0 : 10) +
-          (right.hasError ? 0 : 5) +
-          (right.isChanged ? 0 : 2);
-      if (leftScore != rightScore) {
-        return leftScore.compareTo(rightScore);
-      }
-      return left.path.compareTo(right.path);
-    });
-}
-
-List<Widget> _buildFileTree({
-  required List<_WorkspaceFileEntry> files,
-  required VoidCallback onOpenFiles,
-}) {
-  final root = _WorkspaceTreeNode(name: '', path: '', isFile: false);
-
-  for (final file in files) {
-    final parts = file.path
-        .split(RegExp(r'[\\/]'))
-        .where((part) => part.trim().isNotEmpty)
-        .toList();
-    if (parts.isEmpty) {
-      continue;
-    }
-
-    var current = root;
-    final pathParts = <String>[];
-    for (var index = 0; index < parts.length; index++) {
-      final part = parts[index];
-      pathParts.add(part);
-      final isFile = index == parts.length - 1;
-      current = current.children.putIfAbsent(
-        part,
-        () => _WorkspaceTreeNode(
-          name: part,
-          path: pathParts.join('/'),
-          isFile: isFile,
-        ),
-      );
-      if (isFile) {
-        current.file = file;
-      }
-    }
-  }
-
-  final widgets = <Widget>[];
-  final children = root.children.values.toList()
-    ..sort((left, right) => left.name.compareTo(right.name));
-  for (final child in children) {
-    widgets.add(
-      _WorkspaceTreeTile(
-        node: child,
-        depth: 0,
-        onOpenFiles: onOpenFiles,
-      ),
-    );
-  }
-  return widgets;
-}
-
-class _WorkspaceTreeTile extends StatelessWidget {
-  const _WorkspaceTreeTile({
-    required this.node,
-    required this.depth,
-    required this.onOpenFiles,
-  });
-
-  final _WorkspaceTreeNode node;
-  final int depth;
-  final VoidCallback onOpenFiles;
-
-  @override
-  Widget build(BuildContext context) {
-    if (node.isFile && node.file != null) {
-      return _WorkspaceFileRow(
-        entry: node.file!,
-        depth: depth,
-        onTap: onOpenFiles,
-      );
-    }
-
-    final children = node.children.values.toList()
-      ..sort((left, right) {
-        if (left.isFile != right.isFile) {
-          return left.isFile ? 1 : -1;
-        }
-        return left.name.compareTo(right.name);
-      });
-
-    return Theme(
-      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-      child: ExpansionTile(
-        tilePadding: EdgeInsets.only(left: depth * 14 + 8, right: 4),
-        childrenPadding: EdgeInsets.zero,
-        initiallyExpanded: depth < 1,
-        iconColor: const Color(0xFF8FA0B3),
-        collapsedIconColor: const Color(0xFF637282),
-        title: Row(
-          children: [
-            const Icon(
-              Icons.folder_open_rounded,
-              size: 18,
-              color: Color(0xFF8FA0B3),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                node.name,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: const Color(0xFFEAF1F8),
-                      fontWeight: FontWeight.w600,
-                    ),
-              ),
-            ),
-          ],
-        ),
-        children: [
-          for (final child in children)
-            _WorkspaceTreeTile(
-              node: child,
-              depth: depth + 1,
-              onOpenFiles: onOpenFiles,
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _WorkspaceFileRow extends StatelessWidget {
-  const _WorkspaceFileRow({
-    required this.entry,
-    required this.depth,
-    required this.onTap,
-  });
-
-  final _WorkspaceFileEntry entry;
-  final int depth;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final badges = <Widget>[
-      if (entry.isActive)
-        const _DrawerBadge(label: '현재', tone: Color(0xFF4E8DFF)),
-      if (entry.isChanged)
-        const _DrawerBadge(label: '변경', tone: Color(0xFF2E9D78)),
-      if (entry.isPatch)
-        const _DrawerBadge(label: '패치', tone: Color(0xFFE4B15A)),
-      if (entry.hasError)
-        _DrawerBadge(
-          label: '오류',
-          tone: Theme.of(context).colorScheme.error,
-        ),
-    ];
-
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(depth * 14 + 30, 8, 4, 8),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(
-              _iconForFilePath(entry.path),
-              size: 18,
-              color: const Color(0xFF7FD0B4),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    entry.path.split(RegExp(r'[\\/]')).last,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: const Color(0xFFEAF1F8),
-                          fontWeight: FontWeight.w600,
-                        ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    entry.path,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: const Color(0xFF6F7D8B),
-                        ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            if (badges.isNotEmpty)
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: badges,
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-IconData _iconForFilePath(String path) {
-  final lower = path.toLowerCase();
-  if (lower.endsWith('.dart')) {
-    return Icons.code_rounded;
-  }
-  if (lower.endsWith('.md') || lower.endsWith('.txt')) {
-    return Icons.description_outlined;
-  }
-  if (lower.endsWith('.py')) {
-    return Icons.data_object_rounded;
-  }
-  if (lower.endsWith('.java')) {
-    return Icons.coffee_rounded;
-  }
-  return Icons.insert_drive_file_outlined;
 }

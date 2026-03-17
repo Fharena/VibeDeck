@@ -101,6 +101,11 @@ class AppController extends ChangeNotifier {
   SessionSyncStatus sessionSyncStatus = SessionSyncStatus.idle;
   String sessionSyncDetail = '';
   int sessionLastSyncedAt = 0;
+  final Map<String, List<WorkspaceTreeEntryView>> _workspaceTreeByPath = {};
+  WorkspaceFileContentView workspaceFile = const WorkspaceFileContentView();
+  String workspaceSelectedFilePath = '';
+  bool workspaceFileLoading = false;
+  String? workspaceFileError;
 
   UnmodifiableListView<RunProfileView> get runProfiles =>
       UnmodifiableListView(_runProfiles);
@@ -200,6 +205,27 @@ class AppController extends ChangeNotifier {
   bool get hasSessionSyncTarget => currentThreadId.isNotEmpty;
   bool get canRetrySessionSync => hasSessionSyncTarget && !isLoading;
   bool get canRefreshSessionSync => hasSessionSyncTarget && !isLoading;
+  String get workspaceRootPath {
+    for (final candidate in [
+      liveSession.workspace.rootPath,
+      adapterRuntime.workspaceRoot,
+      bootstrap.workspaceRoot,
+    ]) {
+      final trimmed = candidate.trim();
+      if (trimmed.isNotEmpty) {
+        return trimmed;
+      }
+    }
+    return '';
+  }
+
+  String get currentSharedSessionId {
+    final selected = selectedThreadSummary?.sessionId.trim() ?? '';
+    if (selected.isNotEmpty) {
+      return selected;
+    }
+    return currentThreadId.trim();
+  }
 
   String get sessionSyncStatusLabel {
     switch (sessionSyncStatus) {
@@ -372,6 +398,7 @@ class AppController extends ChangeNotifier {
     topErrors.clear();
     _patchFiles.clear();
     _threadEvents.clear();
+    _clearWorkspaceBrowserState();
     _promptDraftSyncTimer?.cancel();
     _resetSessionSyncState(shouldNotify: false);
     unawaited(_stopSessionStream());
@@ -381,6 +408,7 @@ class AppController extends ChangeNotifier {
   Future<void> selectThread(String threadId) {
     currentThreadId = threadId.trim();
     _patchFiles.clear();
+    _clearWorkspaceBrowserState();
     return _run('스레드 로드', () async {
       await _refreshThreadDetail();
     });
@@ -406,6 +434,131 @@ class AppController extends ChangeNotifier {
     return _run('세션 다시 연결', () async {
       await _reconnectSessionStream(manual: true);
     });
+  }
+
+  List<WorkspaceTreeEntryView> workspaceEntriesForPath(String path) {
+    final normalized = _normalizeWorkspacePath(path);
+    final entries = _workspaceTreeByPath[normalized];
+    if (entries == null) {
+      return const [];
+    }
+    return List<WorkspaceTreeEntryView>.unmodifiable(entries);
+  }
+
+  bool hasWorkspaceEntries(String path) {
+    return _workspaceTreeByPath.containsKey(_normalizeWorkspacePath(path));
+  }
+
+  Future<List<WorkspaceTreeEntryView>> loadWorkspaceTree(
+    String path, {
+    bool force = false,
+  }) async {
+    final normalized = _normalizeWorkspacePath(path);
+    if (!force && _workspaceTreeByPath.containsKey(normalized)) {
+      return workspaceEntriesForPath(normalized);
+    }
+
+    final response = await _api.workspaceTree(
+      agentBaseUrl,
+      path: normalized,
+      sessionId: currentSharedSessionId,
+    );
+    final entriesRaw = response['entries'];
+    final entries = entriesRaw is List
+        ? entriesRaw
+            .whereType<Map>()
+            .map((item) =>
+                WorkspaceTreeEntryView.fromMap(Map<String, dynamic>.from(item)))
+            .toList()
+        : const <WorkspaceTreeEntryView>[];
+
+    _workspaceTreeByPath[normalized] = entries;
+    notifyListeners();
+    return List<WorkspaceTreeEntryView>.unmodifiable(entries);
+  }
+
+  Future<WorkspaceFileContentView> loadWorkspaceFile(String path) async {
+    final normalized = _normalizeWorkspacePath(path);
+    workspaceFileLoading = true;
+    workspaceFileError = null;
+    notifyListeners();
+
+    try {
+      final response = await _api.workspaceFile(agentBaseUrl, normalized);
+      workspaceSelectedFilePath = normalized;
+      workspaceFile = WorkspaceFileContentView.fromMap(response);
+      unawaited(_publishWorkspaceFocus(normalized));
+      return workspaceFile;
+    } on AgentApiException catch (error) {
+      workspaceFileError = '[${error.statusCode}] ${error.message}';
+      rethrow;
+    } finally {
+      workspaceFileLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<WorkspaceFileContentView> saveWorkspaceFile(
+    String path,
+    String content,
+  ) async {
+    final normalized = _normalizeWorkspacePath(path);
+    workspaceFileLoading = true;
+    workspaceFileError = null;
+    notifyListeners();
+
+    try {
+      final response = await _api.saveWorkspaceFile(
+        agentBaseUrl,
+        normalized,
+        content,
+      );
+      workspaceSelectedFilePath = normalized;
+      workspaceFile = WorkspaceFileContentView.fromMap(response);
+      final parentPath = _workspaceParentPath(normalized);
+      if (_workspaceTreeByPath.containsKey(parentPath)) {
+        await loadWorkspaceTree(parentPath, force: true);
+      }
+      unawaited(_publishWorkspaceFocus(normalized));
+      return workspaceFile;
+    } on AgentApiException catch (error) {
+      workspaceFileError = '[${error.statusCode}] ${error.message}';
+      rethrow;
+    } finally {
+      workspaceFileLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> openWorkspaceLocation(
+    String path, {
+    int line = 1,
+    int column = 1,
+  }) async {
+    final normalized = _normalizeWorkspacePath(path);
+    errorMessage = null;
+    notifyListeners();
+
+    try {
+      final responses = await _sendEnvelopeAndAck(
+        _buildEnvelope(
+          type: 'OPEN_LOCATION',
+          payload: {
+            'path': normalized,
+            'line': line,
+            if (column > 0) 'column': column,
+          },
+        ),
+      );
+      _applyResponses(responses);
+      unawaited(_publishWorkspaceFocus(normalized));
+    } on AgentApiException catch (error) {
+      errorMessage = '[${error.statusCode}] ${error.message}';
+      notifyListeners();
+    } catch (error) {
+      errorMessage = error.toString();
+      notifyListeners();
+    }
   }
 
   Future<void> startP2P() {
@@ -653,12 +806,13 @@ class AppController extends ChangeNotifier {
       _threadEvents.clear();
       liveSession = const SessionLiveView();
       sessionOperation = const SessionOperationView();
+      _clearWorkspaceBrowserState();
       _resetSessionSyncState(shouldNotify: false);
       await _stopSessionStream();
       return;
     }
 
-    final detail = await _api.sessionDetail(agentBaseUrl, currentThreadId);
+    final detail = await _api.sessionDetail(agentBaseUrl, currentSharedSessionId);
     _applySessionDetail(detail);
     await _ensureSessionStream();
   }
@@ -768,21 +922,21 @@ class AppController extends ChangeNotifier {
     }
     if (!force &&
         _sessionStreamSub != null &&
-        _sessionStreamThreadId == currentThreadId &&
+        _sessionStreamThreadId == currentSharedSessionId &&
         _sessionStreamBaseUrl == agentBaseUrl) {
       _armSessionSyncWatchdog();
       return;
     }
 
     await _stopSessionStream(preserveSyncState: true);
-    _sessionStreamThreadId = currentThreadId;
+    _sessionStreamThreadId = currentSharedSessionId;
     _sessionStreamBaseUrl = agentBaseUrl;
     _markSessionSyncReconnecting(
       detail: '세션 실시간 연결을 준비하는 중입니다.',
       shouldNotify: false,
     );
     _sessionStreamSub =
-        _api.sessionStream(agentBaseUrl, currentThreadId).listen(
+        _api.sessionStream(agentBaseUrl, currentSharedSessionId).listen(
       (detail) {
         _applySessionDetail(detail);
         notifyListeners();
@@ -838,17 +992,27 @@ class AppController extends ChangeNotifier {
     }
   }
 
-  Future<void> _publishSessionLiveStateSafe(
-      {Map<String, dynamic>? composer}) async {
+  Future<void> _publishSessionLiveStateSafe({
+    Map<String, dynamic>? composer,
+    Map<String, dynamic>? focus,
+    Map<String, dynamic>? workspace,
+  }) async {
     try {
-      await _publishSessionLiveState(composer: composer);
+      await _publishSessionLiveState(
+        composer: composer,
+        focus: focus,
+        workspace: workspace,
+      );
     } catch (error) {
       _handleSessionSyncFault(error, source: 'live_update');
     }
   }
 
-  Future<void> _publishSessionLiveState(
-      {Map<String, dynamic>? composer}) async {
+  Future<void> _publishSessionLiveState({
+    Map<String, dynamic>? composer,
+    Map<String, dynamic>? focus,
+    Map<String, dynamic>? workspace,
+  }) async {
     if (currentThreadId.isEmpty) {
       return;
     }
@@ -869,17 +1033,27 @@ class AppController extends ChangeNotifier {
       },
     };
 
-    final focus = _buildMobileFocus(now);
-    if (focus.isNotEmpty) {
-      update['focus'] = focus;
+    final focusUpdate = <String, dynamic>{
+      ..._buildMobileFocus(now),
+      if (focus != null) ...focus,
+    };
+    if (focusUpdate.isNotEmpty) {
+      focusUpdate['updatedAt'] = focusUpdate['updatedAt'] ?? now;
+      update['focus'] = focusUpdate;
     }
     if (composer != null) {
       update['composer'] = composer;
     }
+    if (workspace != null) {
+      update['workspace'] = {
+        ...workspace,
+        'updatedAt': workspace['updatedAt'] ?? now,
+      };
+    }
 
     final detail = await _api.updateSessionLiveState(
       agentBaseUrl,
-      currentThreadId,
+      currentSharedSessionId,
       update,
     );
     _applySessionDetail(detail);
@@ -902,7 +1076,7 @@ class AppController extends ChangeNotifier {
       shouldNotify: false,
     );
     await _stopSessionStream(preserveSyncState: true);
-    final detail = await _api.sessionDetail(agentBaseUrl, currentThreadId);
+    final detail = await _api.sessionDetail(agentBaseUrl, currentSharedSessionId);
     _applySessionDetail(detail);
     await _ensureSessionStream(force: true);
     notifyListeners();
@@ -1088,6 +1262,65 @@ class AppController extends ChangeNotifier {
       focus['updatedAt'] = now;
     }
     return focus;
+  }
+
+  Future<void> _publishWorkspaceFocus(String path) async {
+    if (currentThreadId.isEmpty) {
+      return;
+    }
+
+    final normalized = _normalizeWorkspacePath(path);
+    if (normalized.isEmpty) {
+      return;
+    }
+
+    final now = DateTime.now().millisecondsSinceEpoch;
+    await _publishSessionLiveStateSafe(
+      focus: {
+        'activeFilePath': normalized,
+        'updatedAt': now,
+      },
+      workspace: {
+        'rootPath': workspaceRootPath,
+        'activeFilePath': normalized,
+        'updatedAt': now,
+      },
+    );
+  }
+
+  void _clearWorkspaceBrowserState() {
+    _workspaceTreeByPath.clear();
+    workspaceFile = const WorkspaceFileContentView();
+    workspaceSelectedFilePath = '';
+    workspaceFileLoading = false;
+    workspaceFileError = null;
+  }
+
+  String _normalizeWorkspacePath(String value) {
+    final trimmed = value.trim().replaceAll('\\', '/');
+    final segments = <String>[];
+    for (final segment in trimmed.split('/')) {
+      final part = segment.trim();
+      if (part.isEmpty || part == '.') {
+        continue;
+      }
+      if (part == '..') {
+        if (segments.isNotEmpty) {
+          segments.removeLast();
+        }
+        continue;
+      }
+      segments.add(part);
+    }
+    return segments.join('/');
+  }
+
+  String _workspaceParentPath(String value) {
+    final normalized = _normalizeWorkspacePath(value);
+    if (normalized.isEmpty || !normalized.contains('/')) {
+      return '';
+    }
+    return normalized.substring(0, normalized.lastIndexOf('/'));
   }
 
   String _liveActivitySummaryForPublish() {
@@ -2575,5 +2808,83 @@ class SessionOperationView {
           : const [],
       lastError: map['lastError']?.toString() ?? '',
     );
+  }
+}
+
+class WorkspaceTreeEntryView {
+  const WorkspaceTreeEntryView({
+    required this.name,
+    required this.path,
+    required this.isDir,
+    required this.gitStatus,
+    required this.isActive,
+    required this.isChanged,
+    required this.isPatch,
+    required this.hasError,
+  });
+
+  final String name;
+  final String path;
+  final bool isDir;
+  final String gitStatus;
+  final bool isActive;
+  final bool isChanged;
+  final bool isPatch;
+  final bool hasError;
+
+  factory WorkspaceTreeEntryView.fromMap(Map<String, dynamic> map) {
+    return WorkspaceTreeEntryView(
+      name: map['name']?.toString() ?? '',
+      path: map['path']?.toString() ?? '',
+      isDir: map['isDir'] == true,
+      gitStatus: map['gitStatus']?.toString() ?? '',
+      isActive: map['isActive'] == true,
+      isChanged: map['isChanged'] == true,
+      isPatch: map['isPatch'] == true,
+      hasError: map['hasError'] == true,
+    );
+  }
+}
+
+class WorkspaceFileContentView {
+  const WorkspaceFileContentView({
+    this.path = '',
+    this.content = '',
+    this.gitStatus = '',
+    this.sizeBytes = 0,
+    this.updatedAtMillis = 0,
+    this.isWritable = false,
+  });
+
+  final String path;
+  final String content;
+  final String gitStatus;
+  final int sizeBytes;
+  final int updatedAtMillis;
+  final bool isWritable;
+
+  factory WorkspaceFileContentView.fromMap(Map<String, dynamic> map) {
+    return WorkspaceFileContentView(
+      path: map['path']?.toString() ?? '',
+      content: map['content']?.toString() ?? '',
+      gitStatus: map['gitStatus']?.toString() ?? '',
+      sizeBytes: map['sizeBytes'] is num
+          ? (map['sizeBytes'] as num).toInt()
+          : int.tryParse(map['sizeBytes']?.toString() ?? '') ?? 0,
+      updatedAtMillis: map['updatedAt'] is num
+          ? (map['updatedAt'] as num).toInt()
+          : int.tryParse(map['updatedAt']?.toString() ?? '') ?? 0,
+      isWritable: map['isWritable'] == true,
+    );
+  }
+
+  String get updatedAtLabel {
+    if (updatedAtMillis <= 0) {
+      return '-';
+    }
+    final dt = DateTime.fromMillisecondsSinceEpoch(updatedAtMillis);
+    final hh = dt.hour.toString().padLeft(2, '0');
+    final mm = dt.minute.toString().padLeft(2, '0');
+    return '$hh:$mm';
   }
 }

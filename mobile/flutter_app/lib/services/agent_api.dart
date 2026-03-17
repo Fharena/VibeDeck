@@ -188,6 +188,53 @@ class AgentApi {
     );
   }
 
+  Future<Map<String, dynamic>> workspaceTree(
+    String baseUrl, {
+    String path = '',
+    String? sessionId,
+  }) {
+    final queryParameters = <String, String>{};
+    if (path.trim().isNotEmpty) {
+      queryParameters['path'] = path.trim();
+    }
+    if (sessionId != null && sessionId.trim().isNotEmpty) {
+      queryParameters['sessionId'] = sessionId.trim();
+    }
+
+    return _request(
+      method: 'GET',
+      baseUrl: baseUrl,
+      path: '/v1/agent/workspace/tree',
+      queryParameters: queryParameters.isEmpty ? null : queryParameters,
+    );
+  }
+
+  Future<Map<String, dynamic>> workspaceFile(
+    String baseUrl,
+    String path,
+  ) {
+    return _request(
+      method: 'GET',
+      baseUrl: baseUrl,
+      path: '/v1/agent/workspace/file',
+      queryParameters: <String, String>{'path': path.trim()},
+    );
+  }
+
+  Future<Map<String, dynamic>> saveWorkspaceFile(
+    String baseUrl,
+    String path,
+    String content,
+  ) {
+    return _request(
+      method: 'PUT',
+      baseUrl: baseUrl,
+      path: '/v1/agent/workspace/file',
+      queryParameters: <String, String>{'path': path.trim()},
+      body: <String, dynamic>{'content': content},
+    );
+  }
+
   Future<Map<String, dynamic>> sendEnvelope(
     String baseUrl,
     Map<String, dynamic> envelope,
@@ -347,14 +394,21 @@ class AgentApi {
     required String baseUrl,
     required String path,
     Map<String, dynamic>? body,
+    Map<String, String>? queryParameters,
   }) async {
-    final uri = _buildUri(baseUrl, path);
+    final uri = _buildUri(baseUrl, path, queryParameters: queryParameters);
 
     late final http.Response response;
     if (method == 'GET') {
       response = await _client.get(uri);
     } else if (method == 'POST') {
       response = await _client.post(
+        uri,
+        headers: const {'Content-Type': 'application/json'},
+        body: body == null ? '{}' : jsonEncode(body),
+      );
+    } else if (method == 'PUT') {
+      response = await _client.put(
         uri,
         headers: const {'Content-Type': 'application/json'},
         body: body == null ? '{}' : jsonEncode(body),
@@ -393,7 +447,11 @@ class AgentApi {
     return <String, dynamic>{'data': decoded};
   }
 
-  Uri _buildUri(String baseUrl, String path) {
+  Uri _buildUri(
+    String baseUrl,
+    String path, {
+    Map<String, String>? queryParameters,
+  }) {
     final normalized = baseUrl.trim();
     if (normalized.isEmpty) {
       throw AgentApiException(0, 'agent base url is empty');
@@ -403,6 +461,10 @@ class AgentApi {
     while (trimmedBase.endsWith('/')) {
       trimmedBase = trimmedBase.substring(0, trimmedBase.length - 1);
     }
-    return Uri.parse(trimmedBase + path);
+    final baseUri = Uri.parse(trimmedBase + path);
+    if (queryParameters == null || queryParameters.isEmpty) {
+      return baseUri;
+    }
+    return baseUri.replace(queryParameters: queryParameters);
   }
 }

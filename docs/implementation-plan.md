@@ -177,14 +177,18 @@
   - 셸을 앱 바 + 드로어 + 하단 composer 구조로 재구성
   - 세션/파일/설정을 메인 피드 밖으로 옮기고 메인 화면은 현재 작업 + 작업 로그에 집중하도록 정리
   - 검증: flutter analyze 통과, 안전 경로 app_smoke_test 통과, 전체 flutter_test_safe.ps1는 기존 bootstrap_settings/status_metrics 실패가 그대로 남아 있음
+- 2026-03-17 / 작업공간 파일 브라우저와 미리보기
+  - 드로어 파일 탭을 flat list 대신 workspace tree + git status + 세션 hint(active/changed/patch/error) 기반으로 교체
+  - 모바일에서 파일 내용을 바로 미리보고, 필요한 경우 간단 편집과 저장까지 할 수 있는 시트를 추가
+  - shared session live update가 thread id fallback으로 흐르지 않도록 session id 우선 경로를 보정
+  - 검증: go test ./internal/agent -run Workspace 통과, flutter analyze 통과, 안전 경로 app_smoke_test 통과
 
 ## 다음 작업 우선순위
 
 1. 세션 UX 기반 정리
-   - 드로어 셸 안에서 파일 상태/미리보기/최소 편집을 확장하되 메인 화면은 다시 불리지 않기
    - 판단 요약 / 계획 흐름 / 도구 활동 스키마를 live sync 품질 기준으로 정교화
+   - inline review / patch-run card를 메인 피드 중심으로 정리
    - 터미널 live state 및 이벤트 스키마를 IDE/mobile 양쪽에서 동일하게 다듬기
-   - workspace tree/focus state 모델을 terminal/file surface 이후 단계까지 확장
 2. Cursor 패널 재구성
    - panel을 `채팅 + 작업 로그 + 터미널 + 파일 트리` 중심 레이아웃으로 개편
    - 현재 thread viewer 성격을 shared session workspace surface로 승격
