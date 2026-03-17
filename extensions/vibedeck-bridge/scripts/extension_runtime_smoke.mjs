@@ -170,7 +170,8 @@ try {
 
     await fakeVscode.commands.executeCommand("vibedeckBridge.validateCommands");
     const validateMessage = messages.info.at(-1) ?? messages.warn.at(-1) ?? messages.error.at(-1) ?? "";
-    assert.match(validateMessage, /required commands ready: 5\/5/);
+    assert.match(validateMessage, /필수 명령 준비: 5\/5/);
+    assert.match(validateMessage, /진단:/);
 
     await fakeVscode.commands.executeCommand("vibedeckBridge.copyAgentEnv");
     const addressMatch = clipboardText.match(/CURSOR_BRIDGE_TCP_ADDR = "([^"]+)"/);

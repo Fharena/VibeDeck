@@ -195,6 +195,11 @@
   - panel presence update가 active file, workspace root, patch files, changed files를 함께 싣도록 보강
   - panel smoke에 editor 변화 시나리오를 추가해 모바일이 볼 live focus/workspace 값이 즉시 갱신되는 경로를 검증
   - 검증: `npm --prefix extensions/vibedeck-bridge run build`, `npm --prefix extensions/vibedeck-bridge run smoke:panel` 통과
+- 2026-03-17 / PC 세팅 상태 안내 한국어 정리
+  - extension 상태창과 명령 진단을 한국어 안내형 메시지로 바꾸고, 세팅 막힘별 권장 조치를 함께 노출
+  - workspace root, 로컬 agent launch mode, binary/repo root 누락, login/trust/model 이슈에 대한 다음 행동을 바로 보이게 정리
+  - doctor, agent env, smoke 명령을 상태창 안에서 바로 확인할 수 있게 정리
+  - 검증: `npm --prefix extensions/vibedeck-bridge run build`, `npm --prefix extensions/vibedeck-bridge run smoke:bootstrap`, `npm --prefix extensions/vibedeck-bridge run smoke:extension` 통과
 
 ## 다음 작업 우선순위
 

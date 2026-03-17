@@ -575,25 +575,19 @@ class DefaultBridgeExtensionController implements BridgeExtensionController {
   }
 
   private currentStatusMessage(): string {
-    if (!this.activeBridge) {
-      if (this.lastBridgeError) {
-        return `VibeDeck bridge is stopped\nlast error: ${this.lastBridgeError}`;
-      }
+    const settings = this.readSettings();
+    const address = resolveAddress(settings);
+    const agentStatus = this.localAgent.status();
 
-      const settings = this.readSettings();
-      const address = resolveAddress(settings);
-      const lines = [
-        "VibeDeck bridge is stopped",
-        `configured address: ${address}`,
-        `agent env: ${buildAgentEnvCommand(address)}`,
-        `provider: ${describeProvider(settings)}`,
-        describeAgentStatus(this.localAgent.status()),
-      ];
-      const smokeCommand = buildSmokeCommand(settings, address);
-      if (smokeCommand) {
-        lines.push(`smoke: ${smokeCommand}`);
-      }
-      return lines.join("\n");
+    if (!this.activeBridge) {
+      return formatBridgeStatusReport({
+        connected: false,
+        address,
+        mode: settings.mode,
+        settings,
+        agentStatus,
+        lastError: this.lastBridgeError,
+      });
     }
 
     return this.describeBridgeStatus(this.activeBridge);
@@ -935,37 +929,14 @@ class DefaultBridgeExtensionController implements BridgeExtensionController {
   }
 
   private describeBridgeStatus(bridge: ActiveBridge): string {
-    const lines = [
-      `VibeDeck bridge: ${bridge.address} (${bridge.mode})`,
-      `agent env: ${buildAgentEnvCommand(bridge.address)}`,
-      `provider: ${describeProvider(bridge.settings)}`,
-      describeAgentStatus(this.localAgent.status()),
-    ];
-
-    const smokeCommand = buildSmokeCommand(bridge.settings, bridge.address);
-    if (smokeCommand) {
-      lines.push(`smoke: ${smokeCommand}`);
-    }
-
-    if (!bridge.diagnostics) {
-      return lines.join("\n");
-    }
-
-    lines.push(
-      `required commands ready: ${bridge.diagnostics.required.length - bridge.diagnostics.missingRequired.length}/${bridge.diagnostics.required.length}`,
-    );
-
-    if (bridge.diagnostics.optional.length > 0) {
-      lines.push(
-        `optional commands ready: ${bridge.diagnostics.optional.length - bridge.diagnostics.missingOptional.length}/${bridge.diagnostics.optional.length}`,
-      );
-    }
-
-    if (bridge.diagnostics.missingOptional.length > 0) {
-      lines.push(`missing optional: ${formatCommandBindings(bridge.diagnostics.missingOptional)}`);
-    }
-
-    return lines.join("\n");
+    return formatBridgeStatusReport({
+      connected: true,
+      address: bridge.address,
+      mode: bridge.mode,
+      settings: bridge.settings,
+      agentStatus: this.localAgent.status(),
+      diagnostics: bridge.diagnostics,
+    });
   }
 }
 
@@ -1051,76 +1022,105 @@ function describeCommandDiagnostics(
   settings: BridgeSettings,
   diagnostics: BridgeCommandDiagnostics,
 ): string {
+  const address = resolveAddress(settings);
+  const agentStatus: LocalAgentStatus = {
+    state: "stopped",
+    launchMode: settings.agent.launchMode,
+    baseUrl: toAgentBaseUrl(settings.agent),
+    command: settings.agent.launchMode,
+    repoRoot: settings.agent.repoRoot,
+    outputTail: [],
+  };
   const lines = [
-    `VibeDeck command validation: ${resolveAddress(settings)}`,
-    `provider: ${describeProvider(settings)}`,
-    `registered commands seen: ${diagnostics.availableCount}`,
-    `required commands ready: ${diagnostics.required.length - diagnostics.missingRequired.length}/${diagnostics.required.length}`,
-    `agent env: ${buildAgentEnvCommand(resolveAddress(settings))}`,
-    describeAgentStatus({
-      state: "stopped",
-      launchMode: settings.agent.launchMode,
-      baseUrl: toAgentBaseUrl(settings.agent),
-      command: settings.agent.launchMode,
-      repoRoot: settings.agent.repoRoot,
-      outputTail: [],
-    }),
+    `VibeDeck 명령 진단: ${address}`,
+    `명령 공급자: ${describeProvider(settings)}`,
+    `등록된 명령 수: ${diagnostics.availableCount}`,
+    `필수 명령 준비: ${diagnostics.required.length - diagnostics.missingRequired.length}/${diagnostics.required.length}`,
+    describeAgentStatus(agentStatus),
   ];
 
-  const smokeCommand = buildSmokeCommand(settings, resolveAddress(settings));
-  if (smokeCommand) {
-    lines.push(`smoke: ${smokeCommand}`);
-  }
+  const smokeCommand = buildSmokeCommand(settings, address);
 
   if (diagnostics.optional.length > 0) {
     lines.push(
-      `optional commands ready: ${diagnostics.optional.length - diagnostics.missingOptional.length}/${diagnostics.optional.length}`,
+      `선택 명령 준비: ${diagnostics.optional.length - diagnostics.missingOptional.length}/${diagnostics.optional.length}`,
     );
   }
 
   if (diagnostics.missingRequired.length > 0) {
-    lines.push(`missing required: ${formatCommandBindings(diagnostics.missingRequired)}`);
+    lines.push(`누락된 필수 명령: ${formatCommandBindings(diagnostics.missingRequired)}`);
   }
 
   if (diagnostics.missingOptional.length > 0) {
-    lines.push(`missing optional: ${formatCommandBindings(diagnostics.missingOptional)}`);
+    lines.push(`누락된 선택 명령: ${formatCommandBindings(diagnostics.missingOptional)}`);
   }
 
-  lines.push(`checked at: ${diagnostics.checkedAt}`);
+  const guidance = collectSetupGuidance({
+    connected: false,
+    settings,
+    agentStatus,
+    diagnostics,
+  });
+  if (guidance.length > 0) {
+    lines.push("권장 조치:");
+    lines.push(...guidance.map((item) => `- ${item}`));
+  }
+
+  lines.push("빠른 확인:");
+  lines.push(`- 진단: ${buildDoctorCommand()}`);
+  lines.push(`- 환경 변수: ${buildAgentEnvCommand(address)}`);
+  if (smokeCommand) {
+    lines.push(`- 스모크: ${smokeCommand}`);
+  }
+
+  lines.push(`확인 시각: ${diagnostics.checkedAt}`);
   return lines.join("\n");
 }
 
 function describeProvider(settings: BridgeSettings): string {
   if (settings.mode === "mock") {
-    return "mock runtime";
+    return "mock 런타임";
   }
   if (settings.commandProvider === "external") {
-    return "external command registry";
+    return "외부 명령 레지스트리";
   }
   return settings.cursorAgent.useWsl
-    ? `builtin cursor-agent via WSL${settings.cursorAgent.wslDistro ? ` (${settings.cursorAgent.wslDistro})` : ""}`
-    : "builtin cursor-agent";
+    ? `내장 cursor-agent (WSL${settings.cursorAgent.wslDistro ? `: ${settings.cursorAgent.wslDistro}` : ""})`
+    : "내장 cursor-agent";
 }
 
 function describeAgentStatus(status: LocalAgentStatus): string {
   const lines = [
-    `agent: ${status.state} (${status.baseUrl})`,
-    `agent launch mode: ${status.launchMode}`,
-    `agent command: ${status.command}`,
+    `로컬 agent: ${describeAgentRuntimeState(status.state)} (${status.baseUrl})`,
+    `agent 실행 방식: ${status.launchMode}`,
+    `agent 명령: ${status.command}`,
   ];
   if (status.repoRoot) {
-    lines.push(`agent repo root: ${status.repoRoot}`);
+    lines.push(`agent 저장소 루트: ${status.repoRoot}`);
   }
   if (status.pid) {
-    lines.push(`agent pid: ${status.pid}`);
+    lines.push(`agent PID: ${status.pid}`);
   }
   if (status.lastError) {
-    lines.push(`agent last error: ${status.lastError}`);
+    lines.push(`agent 최근 오류: ${status.lastError}`);
   }
   if (status.outputTail.length > 0) {
-    lines.push(`agent output: ${status.outputTail.join(" | ")}`);
+    lines.push(`agent 출력: ${status.outputTail.join(" | ")}`);
   }
   return lines.join("\n");
+}
+
+function describeAgentRuntimeState(state: LocalAgentStatus["state"]): string {
+  switch (state) {
+    case "running":
+      return "실행 중";
+    case "starting":
+      return "시작 중";
+    case "error":
+      return "오류";
+    default:
+      return "중지됨";
+  }
 }
 
 function toAgentBaseUrl(settings: LocalAgentSettings): string {
@@ -1186,6 +1186,10 @@ function buildAgentEnvCommand(address: string): string {
   return `$env:CURSOR_BRIDGE_TCP_ADDR = "${address}"`;
 }
 
+function buildDoctorCommand(): string {
+  return "powershell -ExecutionPolicy Bypass -File .\\scripts\\vibedeck_doctor.ps1";
+}
+
 function buildSmokeCommand(settings: BridgeSettings, address: string): string | undefined {
   if (settings.mode === "mock") {
     return `powershell -ExecutionPolicy Bypass -File .\\scripts\\extension_host_smoke.ps1 -BridgeAddress "${address}"`;
@@ -1234,4 +1238,150 @@ function ensureCursorAgentModelArg(args: string[], model: string): string[] {
     return args;
   }
   return [...args, "--model", trimmedModel];
+}
+
+function formatBridgeStatusReport(options: {
+  connected: boolean;
+  address: string;
+  mode: BridgeMode;
+  settings: BridgeSettings;
+  agentStatus: LocalAgentStatus;
+  diagnostics?: BridgeCommandDiagnostics;
+  lastError?: string;
+}): string {
+  const lines = [
+    `VibeDeck 브리지: ${options.connected ? "실행 중" : "중지됨"} (${options.mode})`,
+    `브리지 주소: ${options.address}`,
+    `명령 공급자: ${describeProvider(options.settings)}`,
+    describeAgentStatus(options.agentStatus),
+  ];
+
+  if (options.lastError) {
+    lines.push(`최근 오류: ${options.lastError}`);
+  }
+
+  if (options.diagnostics) {
+    lines.push(
+      `필수 명령 준비: ${options.diagnostics.required.length - options.diagnostics.missingRequired.length}/${options.diagnostics.required.length}`,
+    );
+
+    if (options.diagnostics.optional.length > 0) {
+      lines.push(
+        `선택 명령 준비: ${options.diagnostics.optional.length - options.diagnostics.missingOptional.length}/${options.diagnostics.optional.length}`,
+      );
+    }
+
+    if (options.diagnostics.missingRequired.length > 0) {
+      lines.push(`누락된 필수 명령: ${formatCommandBindings(options.diagnostics.missingRequired)}`);
+    }
+
+    if (options.diagnostics.missingOptional.length > 0) {
+      lines.push(`누락된 선택 명령: ${formatCommandBindings(options.diagnostics.missingOptional)}`);
+    }
+  }
+
+  const guidance = collectSetupGuidance(options);
+  if (guidance.length > 0) {
+    lines.push("권장 조치:");
+    lines.push(...guidance.map((item) => `- ${item}`));
+  }
+
+  lines.push("빠른 확인:");
+  lines.push(`- 진단: ${buildDoctorCommand()}`);
+  lines.push(`- 환경 변수: ${buildAgentEnvCommand(options.address)}`);
+  const smokeCommand = buildSmokeCommand(options.settings, options.address);
+  if (smokeCommand) {
+    lines.push(`- 스모크: ${smokeCommand}`);
+  }
+
+  return lines.join("\n");
+}
+
+function collectSetupGuidance(options: {
+  connected: boolean;
+  settings: BridgeSettings;
+  agentStatus: LocalAgentStatus;
+  diagnostics?: BridgeCommandDiagnostics;
+  lastError?: string;
+}): string[] {
+  const actions: string[] = [];
+  const issueText = [
+    options.lastError,
+    options.agentStatus.lastError,
+    ...options.agentStatus.outputTail,
+  ]
+    .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    .join("\n")
+    .toLowerCase();
+
+  const addAction = (message: string): void => {
+    if (!actions.includes(message)) {
+      actions.push(message);
+    }
+  };
+
+  if (
+    options.settings.mode === "command" &&
+    options.settings.commandProvider === "builtin_cursor_agent" &&
+    !options.settings.cursorAgent.workspaceRoot?.trim()
+  ) {
+    addAction("프로젝트 폴더를 열거나 `vibedeckBridge.cursorAgent.workspaceRoot`를 설정하세요.");
+  }
+
+  if (!options.connected && options.agentStatus.launchMode === "manual") {
+    addAction(
+      "로컬 agent 자동 실행을 쓰려면 VibeDeck 저장소를 작업 폴더로 열어 `go_run`을 쓰거나, `vibedeckBridge.agent.launchMode=binary`와 `vibedeckBridge.agent.binaryPath`를 설정하세요.",
+    );
+  }
+
+  if (issueText.includes("workspace root is not configured")) {
+    addAction("현재 워크스페이스가 비어 있습니다. 프로젝트 폴더를 연 뒤 다시 시작하세요.");
+  }
+
+  if (issueText.includes("agent repo root is required for go_run mode")) {
+    addAction("`vibedeckBridge.agent.repoRoot`를 VibeDeck 저장소 루트로 지정하거나, 저장소 폴더를 그대로 열어 다시 시도하세요.");
+  }
+
+  if (issueText.includes("agent binary path is required for binary mode")) {
+    addAction("`vibedeckBridge.agent.binaryPath`에 agent 실행 파일 경로를 설정하세요.");
+  }
+
+  if (issueText.includes("manual mode cannot be launched")) {
+    addAction("`vibedeckBridge.agent.launchMode`를 `go_run` 또는 `binary`로 바꾸세요.");
+  }
+
+  if (issueText.includes("authentication required") || issueText.includes("agent login")) {
+    if (options.settings.cursorAgent.useWsl) {
+      addAction(
+        `WSL 안에서 \`cursor-agent login\`을 먼저 실행하세요${options.settings.cursorAgent.wslDistro ? ` (${options.settings.cursorAgent.wslDistro})` : ""}.`,
+      );
+    } else {
+      addAction("`cursor-agent login`을 먼저 실행하거나 `CURSOR_API_KEY` 환경 변수를 설정하세요.");
+    }
+  }
+
+  if (issueText.includes("trust")) {
+    addAction("작업공간 신뢰가 필요하면 `vibedeckBridge.cursorAgent.trustWorkspace=true`로 두고 다시 시도하세요.");
+  }
+
+  if (
+    issueText.includes("free plans can only use auto") ||
+    issueText.includes("named models unavailable")
+  ) {
+    addAction("무료 플랜에서는 `vibedeckBridge.cursorAgent.model=auto`를 사용하세요.");
+  }
+
+  if (options.diagnostics?.missingRequired.length) {
+    addAction("필수 브리지 명령이 누락되었습니다. extension host를 다시 시작하거나 브리지 확장 빌드를 다시 확인하세요.");
+  }
+
+  if (options.diagnostics?.missingOptional.length) {
+    addAction("선택 명령이 일부 빠져 있습니다. 패널이나 파일/터미널 표면이 비어 보이면 확장 빌드와 명령 등록 상태를 다시 확인하세요.");
+  }
+
+  if (options.agentStatus.state === "error" && actions.length === 0) {
+    addAction("아래 진단 명령으로 PC 환경을 점검한 뒤 extension을 다시 시작하세요.");
+  }
+
+  return actions;
 }
