@@ -251,8 +251,9 @@ try {
 
     await fakeVscode.commands.executeCommand("vibedeckBridge.showStatus");
     const statusMessage = messages.info.at(-1) ?? messages.warn.at(-1) ?? messages.error.at(-1) ?? "";
-    assert.match(statusMessage, /agent: running/);
+    assert.match(statusMessage, /로컬 agent: 실행 중/);
     assert.match(statusMessage, new RegExp(`http://127\\.0\\.0\\.1:${agentPort}`));
+    assert.match(statusMessage, /진단:/);
 
     console.log(
       JSON.stringify(
