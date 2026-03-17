@@ -37,6 +37,8 @@ export interface ThreadPanelWebviewPanelLike extends DisposableLike {
 
 export interface ThreadPanelWindowLike {
   activeTextEditor?: unknown;
+  onDidChangeActiveTextEditor?(listener: (editor: unknown) => unknown): DisposableLike;
+  onDidChangeTextEditorSelection?(listener: (event: unknown) => unknown): DisposableLike;
   createWebviewPanel(
     viewType: string,
     title: string,
@@ -147,6 +149,8 @@ class DefaultThreadPanelController implements ThreadPanelController {
   private refreshTimer: NodeJS.Timeout | undefined;
   private refreshInFlight: Promise<void> | undefined;
   private sessionStream: DisposableLike | undefined;
+  private readonly editorSyncDisposables: DisposableLike[] = [];
+  private editorSyncTimer: NodeJS.Timeout | undefined;
   private sessionStreamSessionId = "";
   private selectedThreadId = "";
   private composeMode = false;
@@ -182,6 +186,7 @@ class DefaultThreadPanelController implements ThreadPanelController {
     panel.onDidDispose(() => {
       this.panel = undefined;
       this.stopRefreshLoop();
+      this.stopEditorSync();
       this.stopSessionStream();
     });
     panel.webview.onDidReceiveMessage((message) => {
@@ -189,6 +194,7 @@ class DefaultThreadPanelController implements ThreadPanelController {
     });
 
     this.panel = panel;
+    this.startEditorSync();
     this.restartRefreshLoop();
     await this.refresh();
   }
@@ -202,6 +208,7 @@ class DefaultThreadPanelController implements ThreadPanelController {
 
   dispose(): void {
     this.stopRefreshLoop();
+    this.stopEditorSync();
     this.stopSessionStream();
     const panel = this.panel;
     this.panel = undefined;
@@ -274,7 +281,7 @@ class DefaultThreadPanelController implements ThreadPanelController {
       await panel.webview.postMessage({ type: "state", state });
       if (detail && !this.composeMode) {
         this.restartSessionStream(settings.agentBaseUrl, detail.thread.sessionId);
-        void this.publishSessionPresence(settings.agentBaseUrl, detail, state);
+        void this.publishSessionPresence(settings.agentBaseUrl, state);
       } else {
         this.stopSessionStream();
       }
@@ -557,6 +564,59 @@ class DefaultThreadPanelController implements ThreadPanelController {
     this.sessionStream = undefined;
   }
 
+  private startEditorSync(): void {
+    this.stopEditorSync();
+
+    const onDidChangeActiveTextEditor = this.vscode.window.onDidChangeActiveTextEditor;
+    if (typeof onDidChangeActiveTextEditor === "function") {
+      this.editorSyncDisposables.push(
+        onDidChangeActiveTextEditor(() => {
+          this.scheduleEditorSync();
+        }),
+      );
+    }
+
+    const onDidChangeTextEditorSelection = this.vscode.window.onDidChangeTextEditorSelection;
+    if (typeof onDidChangeTextEditorSelection === "function") {
+      this.editorSyncDisposables.push(
+        onDidChangeTextEditorSelection(() => {
+          this.scheduleEditorSync();
+        }),
+      );
+    }
+  }
+
+  private stopEditorSync(): void {
+    if (this.editorSyncTimer) {
+      clearTimeout(this.editorSyncTimer);
+      this.editorSyncTimer = undefined;
+    }
+    while (this.editorSyncDisposables.length > 0) {
+      this.editorSyncDisposables.pop()?.dispose();
+    }
+  }
+
+  private scheduleEditorSync(): void {
+    if (!this.panel || this.composeMode) {
+      return;
+    }
+    if (this.editorSyncTimer) {
+      clearTimeout(this.editorSyncTimer);
+    }
+    this.editorSyncTimer = setTimeout(() => {
+      this.editorSyncTimer = undefined;
+      void this.syncActiveEditorPresence();
+    }, 150);
+  }
+
+  private async syncActiveEditorPresence(): Promise<void> {
+    const state = this.lastState;
+    if (!state || this.composeMode || !state.currentThread?.sessionId) {
+      return;
+    }
+    await this.publishSessionPresence(state.agentBaseUrl, state);
+  }
+
   private applySessionSnapshot(detail: AgentPanelThreadDetail): void {
     const panel = this.panel;
     if (!panel) {
@@ -595,33 +655,39 @@ class DefaultThreadPanelController implements ThreadPanelController {
 
   private async publishSessionPresence(
     baseUrl: string,
-    detail: AgentPanelThreadDetail,
     state: ThreadPanelViewState,
   ): Promise<void> {
+    const currentThread = state.currentThread;
+    if (!currentThread?.sessionId) {
+      return;
+    }
+    const updatedAt = Date.now();
+    const activeEditorFocus = readActiveEditorFocus(this.vscode.window.activeTextEditor);
+    const focus = buildFocusPresenceUpdate(state, activeEditorFocus, updatedAt);
+    const workspace = buildWorkspacePresenceUpdate(state, focus, updatedAt);
     const update: Record<string, unknown> = {
       participant: {
         participantId: "cursor-panel",
         clientType: "cursor_panel",
         displayName: "Cursor Panel",
         active: true,
-        lastSeenAt: Date.now(),
+        lastSeenAt: updatedAt,
       },
       activity: {
-        phase: detail.operationState.phase || detail.thread.state,
-        summary:
-          state.derived.promptText.trim().length > 0
-            ? "Cursor 패널에서 프롬프트 작성 중"
-            : "Cursor 패널에서 세션을 보고 있습니다.",
-        updatedAt: Date.now(),
+        phase: firstNonEmptyText(state.operation.phase, currentThread.state),
+        summary: sessionPresenceSummary(state),
+        updatedAt,
       },
     };
 
-    const focus = readActiveEditorFocus(this.vscode.window.activeTextEditor);
     if (focus) {
       update.focus = focus;
     }
+    if (workspace) {
+      update.workspace = workspace;
+    }
 
-    await this.publishSessionLiveState(baseUrl, detail.thread.sessionId, update);
+    await this.publishSessionLiveState(baseUrl, currentThread.sessionId, update);
   }
 
   private async clearSessionComposer(baseUrl: string, sessionId: string): Promise<void> {
@@ -997,6 +1063,36 @@ function patchFilePaths(files: ThreadPanelPatchFile[]): string[] {
   return files.map((file) => file.path).filter((item) => item.length > 0);
 }
 
+function uniqueNonEmptyStrings(...items: Array<readonly string[] | string | undefined>): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const item of items) {
+    if (!item) {
+      continue;
+    }
+    const values = Array.isArray(item) ? item : [item];
+    for (const raw of values) {
+      const value = text(raw).trim();
+      if (!value || seen.has(value)) {
+        continue;
+      }
+      seen.add(value);
+      result.push(value);
+    }
+  }
+  return result;
+}
+
+function firstNonEmptyText(...items: Array<string | undefined>): string {
+  for (const item of items) {
+    const value = text(item).trim();
+    if (value) {
+      return value;
+    }
+  }
+  return "";
+}
+
 function patchAvailabilityReason(input: {
   currentJobId: string;
   patchFiles: ThreadPanelPatchFile[];
@@ -1098,6 +1194,94 @@ function readActiveEditorFocus(editor: unknown): Record<string, unknown> | null 
     selection: parts.join(' -> '),
     updatedAt: Date.now(),
   });
+}
+
+function buildFocusPresenceUpdate(
+  state: ThreadPanelViewState,
+  editorFocus: Record<string, unknown> | null,
+  updatedAt: number,
+): Record<string, unknown> | null {
+  const liveFocus = state.live.focus;
+  const focusValue = objectValue(editorFocus);
+  const activeFilePath = firstNonEmptyText(
+    text(focusValue.activeFilePath),
+    liveFocus.activeFilePath,
+  );
+  const selection = firstNonEmptyText(
+    text(focusValue.selection),
+    liveFocus.selection,
+  );
+  const patchPath = liveFocus.patchPath.trim();
+  const runErrorPath = liveFocus.runErrorPath.trim();
+  const runErrorLine = numberValue(liveFocus.runErrorLine);
+
+  if (!activeFilePath && !selection && !patchPath && !runErrorPath && runErrorLine === 0) {
+    return null;
+  }
+
+  return {
+    activeFilePath,
+    selection,
+    patchPath,
+    runErrorPath,
+    runErrorLine,
+    updatedAt,
+  };
+}
+
+function buildWorkspacePresenceUpdate(
+  state: ThreadPanelViewState,
+  focus: Record<string, unknown> | null,
+  updatedAt: number,
+): Record<string, unknown> | null {
+  const liveWorkspace = state.live.workspace;
+  const focusValue = objectValue(focus);
+  const focusPatchPath = text(focusValue.patchPath).trim();
+  const activeFilePath = firstNonEmptyText(
+    text(focusValue.activeFilePath),
+    liveWorkspace.activeFilePath,
+    focusPatchPath,
+    text(focusValue.runErrorPath),
+  );
+  const patchFiles = uniqueNonEmptyStrings(
+    patchFilePaths(state.derived.patchFiles),
+    state.operation.patchFiles,
+    liveWorkspace.patchFiles,
+    focusPatchPath,
+  );
+  const changedFiles = uniqueNonEmptyStrings(
+    state.operation.runChangedFiles,
+    state.derived.currentJobFiles,
+    liveWorkspace.changedFiles,
+  );
+  const rootPath = firstNonEmptyText(liveWorkspace.rootPath, state.adapter.workspaceRoot);
+
+  if (!rootPath && !activeFilePath && patchFiles.length === 0 && changedFiles.length === 0) {
+    return null;
+  }
+
+  return {
+    rootPath,
+    activeFilePath,
+    patchFiles,
+    changedFiles,
+    updatedAt,
+  };
+}
+
+function sessionPresenceSummary(state: ThreadPanelViewState): string {
+  const promptText = firstNonEmptyText(
+    state.live.composer.draftText,
+    state.derived.promptText,
+  );
+  if (promptText) {
+    return "Cursor 패널에서 프롬프트 작성 중";
+  }
+  return firstNonEmptyText(
+    state.live.activity.summary,
+    state.currentThread?.lastEventText,
+    state.currentJobId ? "Cursor 패널에서 작업 상태를 확인 중입니다." : "Cursor 패널에서 세션을 보고 있습니다.",
+  );
 }
 
 function normalizeRefreshMs(value: number): number {

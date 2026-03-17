@@ -190,6 +190,11 @@
   - Cursor 패널에서 thread 선택 상태와 session API 호출을 분리해 detail 조회, live state publish, session stream이 session id 기준으로 흐르도록 정리
   - panel smoke fixture도 `/sessions/{sessionId}` 기준으로 맞춰 공유 세션 경로 검증이 thread id fallback에 묶이지 않도록 보정
   - 검증: `npm --prefix extensions/vibedeck-bridge run build`, `npm --prefix extensions/vibedeck-bridge run smoke:panel` 통과
+- 2026-03-17 / Cursor 패널 포커스·작업공간 live sync 보강
+  - active editor 변경과 selection 변경을 패널에서 감지해 focus/workspace live state를 세션에 다시 publish하도록 정리
+  - panel presence update가 active file, workspace root, patch files, changed files를 함께 싣도록 보강
+  - panel smoke에 editor 변화 시나리오를 추가해 모바일이 볼 live focus/workspace 값이 즉시 갱신되는 경로를 검증
+  - 검증: `npm --prefix extensions/vibedeck-bridge run build`, `npm --prefix extensions/vibedeck-bridge run smoke:panel` 통과
 
 ## 다음 작업 우선순위
 
