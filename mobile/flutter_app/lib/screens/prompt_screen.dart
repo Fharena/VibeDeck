@@ -33,6 +33,38 @@ IconData _syncIcon(SessionSyncStatus status) {
   }
 }
 
+Color _syncLogTone(BuildContext context, String kind) {
+  switch (kind) {
+    case 'live':
+      return const Color(0xFF2E9D78);
+    case 'stale':
+      return const Color(0xFFD28A32);
+    case 'failed':
+      return Theme.of(context).colorScheme.error;
+    case 'manual':
+      return const Color(0xFFE4B15A);
+    case 'reconnecting':
+    default:
+      return const Color(0xFF4E8DFF);
+  }
+}
+
+IconData _syncLogIcon(String kind) {
+  switch (kind) {
+    case 'live':
+      return Icons.cloud_done_outlined;
+    case 'stale':
+      return Icons.schedule_outlined;
+    case 'failed':
+      return Icons.sync_problem_outlined;
+    case 'manual':
+      return Icons.touch_app_outlined;
+    case 'reconnecting':
+    default:
+      return Icons.autorenew_rounded;
+  }
+}
+
 String _compactPath(String value, {int keep = 34}) {
   final trimmed = value.trim();
   if (trimmed.length <= keep) {
@@ -169,7 +201,8 @@ class _PromptScreenState extends State<PromptScreen> {
         final shouldShowSyncBanner = widget
                 .controller.currentThreadId.isNotEmpty &&
             (widget.controller.sessionSyncStatus != SessionSyncStatus.live ||
-                widget.controller.sessionSyncDetail.trim().isNotEmpty);
+                widget.controller.sessionSyncDetail.trim().isNotEmpty ||
+                widget.controller.hasRecentSessionSyncLogs);
         final draftPreview = widget.controller.liveDraftPreview.isNotEmpty
             ? widget.controller.liveDraftPreview
             : widget.controller.promptDraft;
@@ -1437,6 +1470,7 @@ class _SessionSyncBanner extends StatelessWidget {
     final tone = _syncTone(context, controller.sessionSyncStatus);
     final showActions = controller.hasSessionSyncTarget &&
         controller.sessionSyncStatus != SessionSyncStatus.live;
+    final recoveryLogs = controller.sessionSyncLogs.take(3).toList();
 
     return Container(
       width: double.infinity,
@@ -1487,6 +1521,104 @@ class _SessionSyncBanner extends StatelessWidget {
                     color: const Color(0xFFB9C6D4),
                     height: 1.35,
                   ),
+            ),
+          ],
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _MetricChip(label: '현재 phase', value: controller.currentSessionPhase),
+              _MetricChip(label: '재시도', value: controller.sessionSyncAttemptLabel),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _StreamSurface(
+            label: '다음 액션',
+            accent: tone,
+            child: Text(
+              controller.sessionSyncNextAction,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: const Color(0xFFDCE6F2),
+                    height: 1.4,
+                  ),
+            ),
+          ),
+          if (recoveryLogs.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _StreamSurface(
+              label: '복구 로그',
+              accent: tone,
+              child: Column(
+                children: [
+                  for (var index = 0; index < recoveryLogs.length; index++)
+                    Padding(
+                      padding: EdgeInsets.only(
+                        bottom: index == recoveryLogs.length - 1 ? 0 : 10,
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            _syncLogIcon(recoveryLogs[index].kind),
+                            color: _syncLogTone(
+                              context,
+                              recoveryLogs[index].kind,
+                            ),
+                            size: 16,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        recoveryLogs[index].title,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall
+                                            ?.copyWith(
+                                              color: const Color(0xFFF4F7FB),
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      recoveryLogs[index].atLabel,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
+                                            color: const Color(0xFF9FB0C0),
+                                          ),
+                                    ),
+                                  ],
+                                ),
+                                if (recoveryLogs[index].detail.isNotEmpty) ...[
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    recoveryLogs[index].detail,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.copyWith(
+                                          color: const Color(0xFFB9C6D4),
+                                          height: 1.35,
+                                        ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
             ),
           ],
           if (showActions) ...[
