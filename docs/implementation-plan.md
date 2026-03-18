@@ -219,19 +219,20 @@
   - 메인 피드 workstream 카드에 `최근 터미널` surface를 추가해 최근 실행 상태, 명령, 요약, 출력 미리보기를 함께 노출
   - 터미널 시트에서 상위 에러 위치와 최근 파일을 바로 열 수 있게 연결하고, 작업 로그 이벤트에도 명령/출력/상위 에러를 함께 보여주도록 정리
   - 검증: 안전 경로 `flutter analyze` 통과, 안전 경로 `flutter test test/app_smoke_test.dart` 통과
+- 2026-03-18 / 모바일 파일 드로어 실시간 포커스 sync 보강
+  - 파일 드로어 상단에 `실시간 포커스` 카드를 추가해 현재 파일, 선택 영역, 최근 에러 위치를 메인 피드 밖에서 바로 확인할 수 있게 정리
+  - `파일 포커스` 시트에 `포커스 열기`, `에러 열기` 액션을 추가하고, 세션 live update가 들어오면 캐시된 workspace tree를 필요한 경로만 다시 불러오도록 보강
+  - 검증: 안전 경로 `flutter analyze` 통과, 안전 경로 `flutter test test/app_smoke_test.dart` 통과
 
 ## 다음 작업 우선순위
 
-1. 실시간 터미널/파일 포커스 동기화 마감
-   - Cursor와 모바일이 같은 terminal tail / focused file / changed files를 더 촘촘하게 공유
-   - selection/error pointer 갱신 타이밍과 최근 실행 문맥을 양쪽에서 맞추기
-2. Cursor 세션 복원/로그 가시성 + stalled recovery
+1. Cursor 세션 복원/로그 가시성 + stalled recovery
    - reconnect 이후 reasoning/tool/run 기록 복원이 자연스럽게 이어지도록 정리
    - 오래 멈춘 세션 감지와 복구 안내를 shared session 흐름 안에서 다듬기
-3. Windows smoke cleanup/agent 잠금 이슈 정리
-4. control timeout budget 운영 설정 외부화
-5. 설치 산출물 버전 관리/릴리스 자동화
-6. Cursor 외 provider(Codex/Claude Code/Antigravity) 확장용 adapter mode 정리
+2. Windows smoke cleanup/agent 잠금 이슈 정리
+3. control timeout budget 운영 설정 외부화
+4. 설치 산출물 버전 관리/릴리스 자동화
+5. Cursor 외 provider(Codex/Claude Code/Antigravity) 확장용 adapter mode 정리
 
 주의:
 - provider 확장은 Cursor 기반 unified session 흐름이 충분히 완성된 뒤에 진행한다.

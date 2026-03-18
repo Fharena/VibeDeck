@@ -53,6 +53,9 @@ void main() {
     await tester.tap(find.text('파일'));
     await tester.pumpAndSettle();
 
+    expect(find.text('실시간 포커스'), findsOneWidget);
+    expect(find.text('포커스 보기'), findsOneWidget);
+    expect(find.textContaining('선택: 인증 미들웨어'), findsOneWidget);
     expect(find.text('README.md'), findsWidgets);
 
     await tester.tap(find.text('설정'));
