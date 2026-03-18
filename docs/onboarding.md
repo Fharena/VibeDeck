@@ -69,6 +69,8 @@ Git Bash에서는 경로 변환 때문에 아래처럼 실행해야 합니다.
 MSYS_NO_PATHCONV=1 wsl.exe -d Ubuntu -- /home/<user>/.local/bin/cursor-agent login
 ```
 
+`cursor_agent_smoke.ps1`가 `resource_exhausted`로 실패하면 설치 문제보다는 Cursor 계정의 사용량 한도, 결제 상태, 동시 실행 제한을 먼저 확인하세요.
+
 ## 4. Extension VSIX 패키징
 
 extension을 로컬 설치 가능한 `.vsix`로 만들려면:
