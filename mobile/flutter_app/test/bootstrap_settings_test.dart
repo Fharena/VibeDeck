@@ -11,8 +11,6 @@ void main() {
       settingsStore: settingsStore,
     );
 
-    addTearDown(controller.dispose);
-
     await controller.initialize();
 
     expect(controller.agentBaseUrl, 'http://192.168.0.24:8080');
@@ -20,6 +18,7 @@ void main() {
     expect(controller.bootstrap.workspaceRoot, 'C:/demo/workspace');
     expect(controller.bootstrap.adapter.provider, 'cursor');
     expect(controller.currentThreadId, 'thread-bootstrap-1');
+    expect(controller.currentSharedSessionId, 'sid-bootstrap');
     expect(controller.recentHosts, hasLength(1));
     expect(controller.recentHosts.single.agentBaseUrl, 'http://192.168.0.24:8080');
     expect(
@@ -31,13 +30,15 @@ void main() {
       api: FakeBootstrapAgentApi(),
       settingsStore: settingsStore,
     );
-    addTearDown(restored.dispose);
 
     await restored.initialize();
 
     expect(restored.agentBaseUrl, 'http://192.168.0.24:8080');
     expect(restored.signalingBaseUrl, 'http://192.168.0.24:8081');
     expect(restored.recentHosts, isNotEmpty);
+
+    restored.dispose();
+    controller.dispose();
   });
 }
 
@@ -49,6 +50,7 @@ class FakeBootstrapAgentApi extends AgentApi {
       'signalingBaseUrl': 'http://192.168.0.24:8081',
       'workspaceRoot': 'C:/demo/workspace',
       'currentThreadId': 'thread-bootstrap-1',
+      'currentSessionId': 'sid-bootstrap',
       'adapter': {
         'name': 'cursor-agent-cli',
         'mode': 'cursor_agent_cli',
@@ -135,6 +137,24 @@ class FakeBootstrapAgentApi extends AgentApi {
   }
 
   @override
+  Future<Map<String, dynamic>> sessions(String baseUrl) async {
+    return {
+      'threads': [
+        {
+          'id': 'thread-bootstrap-1',
+          'title': '최근 작업',
+          'sessionId': 'sid-bootstrap',
+          'state': 'draft',
+          'currentJobId': '',
+          'lastEventKind': '',
+          'lastEventText': '',
+          'updatedAt': DateTime(2026, 3, 8, 20, 45).millisecondsSinceEpoch,
+        },
+      ],
+    };
+  }
+
+  @override
   Future<Map<String, dynamic>> threads(String baseUrl) async {
     return {
       'threads': [
@@ -149,6 +169,61 @@ class FakeBootstrapAgentApi extends AgentApi {
           'updatedAt': DateTime(2026, 3, 8, 20, 45).millisecondsSinceEpoch,
         },
       ],
+    };
+  }
+
+  @override
+  Future<Map<String, dynamic>> sessionDetail(String baseUrl, String sessionId) async {
+    return {
+      'thread': {
+        'id': 'thread-bootstrap-1',
+        'title': '최근 작업',
+        'sessionId': 'sid-bootstrap',
+        'state': 'draft',
+        'currentJobId': '',
+        'lastEventKind': '',
+        'lastEventText': '',
+        'updatedAt': DateTime(2026, 3, 8, 20, 45).millisecondsSinceEpoch,
+      },
+      'events': const [],
+      'liveState': const <String, dynamic>{},
+      'operationState': const <String, dynamic>{},
+    };
+  }
+
+  @override
+  Stream<Map<String, dynamic>> sessionStream(String baseUrl, String sessionId) {
+    return const Stream<Map<String, dynamic>>.empty();
+  }
+
+  @override
+  Future<Map<String, dynamic>> updateSessionLiveState(
+    String baseUrl,
+    String sessionId,
+    Map<String, dynamic> update,
+  ) async {
+    return {
+      'thread': {
+        'id': 'thread-bootstrap-1',
+        'title': '최근 작업',
+        'sessionId': 'sid-bootstrap',
+        'state': 'draft',
+        'currentJobId': '',
+        'lastEventKind': '',
+        'lastEventText': '',
+        'updatedAt': DateTime(2026, 3, 8, 20, 45).millisecondsSinceEpoch,
+      },
+      'events': const [],
+      'liveState': {
+        'participant': {
+          'participantId': 'mobile-test',
+          'clientType': 'mobile',
+          'displayName': 'VibeDeck Mobile',
+          'active': true,
+          'lastSeenAt': DateTime(2026, 3, 8, 20, 45).millisecondsSinceEpoch,
+        },
+      },
+      'operationState': const <String, dynamic>{},
     };
   }
 

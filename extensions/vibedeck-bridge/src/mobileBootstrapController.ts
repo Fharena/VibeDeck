@@ -76,6 +76,7 @@ interface MobileBootstrapViewState {
   publicSignalingBaseUrl: string;
   workspaceRoot: string;
   currentThreadId: string;
+  currentSessionId: string;
   provider: string;
   hostSource: string;
   warning: string;
@@ -97,6 +98,7 @@ export function buildMobileBootstrapLink(input: {
   agentBaseUrl: string;
   signalingBaseUrl: string;
   threadId: string;
+  sessionId?: string;
 }): string {
   const scheme = input.scheme.trim() || "vibedeck";
   const url = new URL(`${scheme}://bootstrap`);
@@ -108,6 +110,9 @@ export function buildMobileBootstrapLink(input: {
   }
   if (input.threadId.trim()) {
     url.searchParams.set("thread", input.threadId.trim());
+  }
+  if ((input.sessionId ?? "").trim()) {
+    url.searchParams.set("session", (input.sessionId ?? "").trim());
   }
   return url.toString();
 }
@@ -261,6 +266,7 @@ class DefaultMobileBootstrapController implements MobileBootstrapController {
           publicSignalingBaseUrl: "",
           workspaceRoot: "",
           currentThreadId: "",
+          currentSessionId: "",
           provider: "",
           hostSource: "",
           warning: message,
@@ -288,12 +294,14 @@ class DefaultMobileBootstrapController implements MobileBootstrapController {
       bootstrap.signalingBaseUrl || settings.signalingBaseUrl,
       effectiveHost,
     );
+    const currentSessionId = bootstrap.currentSessionId || "";
     const currentThreadId = bootstrap.currentThreadId || bootstrap.currentSessionId;
     const bootstrapLink = buildMobileBootstrapLink({
       scheme: settings.scheme,
       agentBaseUrl: publicAgentBaseUrl,
       signalingBaseUrl: publicSignalingBaseUrl,
       threadId: currentThreadId,
+      sessionId: currentSessionId,
     });
 
     const warning = buildWarning(settings, effectiveHost, publicAgentBaseUrl);
@@ -304,6 +312,7 @@ class DefaultMobileBootstrapController implements MobileBootstrapController {
       publicSignalingBaseUrl,
       workspaceRoot: bootstrap.workspaceRoot,
       currentThreadId,
+      currentSessionId,
       provider: bootstrap.adapter.provider,
       hostSource: settings.hostOverride ? "manual" : effectiveHost,
       warning,
@@ -444,6 +453,7 @@ function renderMobileBootstrapHtml(nonce: string): string {
       publicSignalingBaseUrl: '',
       workspaceRoot: '',
       currentThreadId: '',
+      currentSessionId: '',
       provider: '',
       hostSource: '',
       warning: '',
@@ -491,6 +501,7 @@ function renderMobileBootstrapHtml(nonce: string): string {
         '    <div class="muted">agent</div><div class="value">' + esc(state.publicAgentBaseUrl || '-') + '</div>',
         '    <div class="muted">signaling</div><div class="value">' + esc(state.publicSignalingBaseUrl || '-') + '</div>',
         '    <div class="muted">thread</div><div class="value">' + esc(state.currentThreadId || '-') + '</div>',
+        '    <div class="muted">session</div><div class="value">' + esc(state.currentSessionId || '-') + '</div>',
         '    <div class="muted">workspace</div><div class="value">' + esc(state.workspaceRoot || '-') + '</div>',
         '    <div class="muted">deep link</div><div class="value">' + esc(state.bootstrapLink || '-') + '</div>',
         '  </div>',

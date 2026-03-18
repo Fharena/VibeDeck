@@ -136,6 +136,7 @@ cd .\mobile\flutter_app
 - 실기기: PC LAN IP 사용
 - 실기기 + extension local agent 조합이면 Cursor 설정에서 `vibedeckBridge.agent.host=0.0.0.0`로 바꾸고 `VibeDeck: Restart Local Agent` 실행
 - `signaling` 서버는 `go run ./cmd/signaling`으로 별도 실행
+- `VibeDeck: Open Mobile Bootstrap`으로 다시 연 QR/deep link는 `agent/signaling`뿐 아니라 현재 `session/thread` 기본값도 함께 넘긴다. 모바일에서 `thread not found`가 보이면 bootstrap을 다시 열고 QR을 재스캔한다.
 
 필수 확인 항목:
 
