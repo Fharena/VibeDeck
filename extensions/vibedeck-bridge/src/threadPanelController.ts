@@ -28,6 +28,17 @@ export interface ThreadPanelWebviewLike {
   postMessage(message: unknown): Promise<boolean> | Thenable<boolean>;
 }
 
+export interface ThreadPanelWebviewViewLike {
+  webview: ThreadPanelWebviewLike;
+  title?: string;
+  description?: string;
+  show?(preserveFocus?: boolean): void;
+}
+
+export interface ThreadPanelWebviewViewProviderLike {
+  resolveWebviewView(view: ThreadPanelWebviewViewLike): unknown;
+}
+
 export interface ThreadPanelWebviewPanelLike extends DisposableLike {
   title: string;
   webview: ThreadPanelWebviewLike;
@@ -39,6 +50,10 @@ export interface ThreadPanelWindowLike {
   activeTextEditor?: unknown;
   onDidChangeActiveTextEditor?(listener: (editor: unknown) => unknown): DisposableLike;
   onDidChangeTextEditorSelection?(listener: (event: unknown) => unknown): DisposableLike;
+  registerWebviewViewProvider?(
+    viewId: string,
+    provider: ThreadPanelWebviewViewProviderLike,
+  ): DisposableLike;
   createWebviewPanel(
     viewType: string,
     title: string,
@@ -51,6 +66,9 @@ export interface ThreadPanelWindowLike {
 }
 
 export interface ThreadPanelVscodeLike {
+  commands?: {
+    executeCommand<T = unknown>(command: string, ...args: unknown[]): Promise<T>;
+  };
   window: ThreadPanelWindowLike;
   workspace: ThreadPanelWorkspaceLike;
   viewColumn: {
@@ -143,9 +161,15 @@ export function createThreadPanelController(
 }
 
 class DefaultThreadPanelController implements ThreadPanelController {
+  private static readonly sidebarContainerId = "vibedeckBridge";
+
+  private static readonly sidebarViewId = "vibedeckBridge.sharedThreads";
+
   private readonly vscode: ThreadPanelVscodeLike;
   private readonly api: AgentPanelApi;
   private panel: ThreadPanelWebviewPanelLike | undefined;
+  private view: ThreadPanelWebviewViewLike | undefined;
+  private readonly viewRegistration: DisposableLike | undefined;
   private refreshTimer: NodeJS.Timeout | undefined;
   private refreshInFlight: Promise<void> | undefined;
   private sessionStream: DisposableLike | undefined;
@@ -162,9 +186,18 @@ class DefaultThreadPanelController implements ThreadPanelController {
   constructor(vscodeLike: ThreadPanelVscodeLike, api: AgentPanelApi) {
     this.vscode = vscodeLike;
     this.api = api;
+    this.viewRegistration = this.registerSidebarView();
   }
 
   async openOrReveal(): Promise<void> {
+    if (this.viewRegistration) {
+      await this.revealSidebarView();
+      if (this.view?.show) {
+        this.view.show(true);
+      }
+      await this.refreshIfOpen();
+      return;
+    }
     if (this.panel) {
       this.panel.reveal(this.vscode.viewColumn.one);
       await this.refresh();
@@ -200,7 +233,7 @@ class DefaultThreadPanelController implements ThreadPanelController {
   }
 
   async refreshIfOpen(): Promise<void> {
-    if (!this.panel) {
+    if (!this.currentHost()) {
       return;
     }
     await this.refresh();
@@ -210,13 +243,66 @@ class DefaultThreadPanelController implements ThreadPanelController {
     this.stopRefreshLoop();
     this.stopEditorSync();
     this.stopSessionStream();
+    this.viewRegistration?.dispose();
+    this.view = undefined;
     const panel = this.panel;
     this.panel = undefined;
     panel?.dispose();
   }
 
+  private registerSidebarView(): DisposableLike | undefined {
+    const registerProvider = this.vscode.window.registerWebviewViewProvider;
+    if (typeof registerProvider !== "function") {
+      return undefined;
+    }
+    return registerProvider(DefaultThreadPanelController.sidebarViewId, {
+      resolveWebviewView: (view) => {
+        this.attachView(view);
+      },
+    });
+  }
+
+  private attachView(view: ThreadPanelWebviewViewLike): void {
+    this.view = view;
+    if (this.panel) {
+      this.panel.dispose();
+      this.panel = undefined;
+    }
+    const nonce = randomBytes(16).toString("hex");
+    view.webview.html = renderThreadPanelHtml(nonce);
+    view.webview.onDidReceiveMessage((message) => {
+      void this.handleMessage(message);
+    });
+    this.startEditorSync();
+    this.restartRefreshLoop();
+    void this.refresh();
+  }
+
+  private async revealSidebarView(): Promise<void> {
+    const executeCommand = this.vscode.commands?.executeCommand;
+    if (typeof executeCommand !== "function") {
+      return;
+    }
+    try {
+      await executeCommand(
+        `workbench.view.extension.${DefaultThreadPanelController.sidebarContainerId}`,
+      );
+    } catch {
+      // Cursor/VS Code 버전에 따라 컨테이너 reveal command가 다를 수 있어, 실패 시 조용히 폴백한다.
+    }
+    try {
+      await executeCommand(`${DefaultThreadPanelController.sidebarViewId}.focus`);
+    } catch {
+      // 자동 focus command가 없는 환경에서는 컨테이너 reveal만으로 충분하다.
+    }
+  }
+
+  private currentHost(): { webview: ThreadPanelWebviewLike; title?: string; description?: string } | undefined {
+    return this.view ?? this.panel;
+  }
+
   private async refresh(): Promise<void> {
-    if (!this.panel) {
+    if (!this.currentHost()) {
       return;
     }
     if (this.refreshInFlight) {
@@ -233,8 +319,8 @@ class DefaultThreadPanelController implements ThreadPanelController {
   }
 
   private async refreshCore(): Promise<void> {
-    const panel = this.panel;
-    if (!panel) {
+    const host = this.currentHost();
+    if (!host) {
       return;
     }
 
@@ -278,7 +364,7 @@ class DefaultThreadPanelController implements ThreadPanelController {
 
       this.lastState = state;
       this.updatePanelTitle(state);
-      await panel.webview.postMessage({ type: "state", state });
+      await host.webview.postMessage({ type: "state", state });
       if (detail && !this.composeMode) {
         this.restartSessionStream(settings.agentBaseUrl, detail.thread.sessionId);
         void this.publishSessionPresence(settings.agentBaseUrl, state);
@@ -296,7 +382,7 @@ class DefaultThreadPanelController implements ThreadPanelController {
       );
       this.lastState = state;
       this.updatePanelTitle(state);
-      await panel.webview.postMessage({ type: "state", state });
+      await host.webview.postMessage({ type: "state", state });
     }
   }
 
@@ -597,7 +683,7 @@ class DefaultThreadPanelController implements ThreadPanelController {
   }
 
   private scheduleEditorSync(): void {
-    if (!this.panel || this.composeMode) {
+    if (!this.currentHost() || this.composeMode) {
       return;
     }
     if (this.editorSyncTimer) {
@@ -618,8 +704,8 @@ class DefaultThreadPanelController implements ThreadPanelController {
   }
 
   private applySessionSnapshot(detail: AgentPanelThreadDetail): void {
-    const panel = this.panel;
-    if (!panel) {
+    const host = this.currentHost();
+    if (!host) {
       return;
     }
 
@@ -650,7 +736,7 @@ class DefaultThreadPanelController implements ThreadPanelController {
 
     this.lastState = nextState;
     this.updatePanelTitle(nextState);
-    void panel.webview.postMessage({ type: "state", state: nextState });
+    void host.webview.postMessage({ type: "state", state: nextState });
   }
 
   private async publishSessionPresence(
@@ -812,13 +898,19 @@ class DefaultThreadPanelController implements ThreadPanelController {
   }
 
   private updatePanelTitle(state: ThreadPanelViewState): void {
-    if (!this.panel) {
+    if (!this.currentHost()) {
       return;
     }
     const title = state.composeMode
       ? "새 스레드"
       : state.currentThread?.title || "세션";
-    this.panel.title = `VibeDeck: ${title}`;
+    if (this.panel) {
+      this.panel.title = `VibeDeck: ${title}`;
+      return;
+    }
+    if (this.view) {
+      this.view.description = title;
+    }
   }
 }
 
@@ -834,6 +926,8 @@ function buildViewState(input: {
   errorMessage: string;
 }): ThreadPanelViewState {
   const currentThread = input.detail?.thread ?? null;
+  const liveState = normalizeSessionLiveState(input.detail?.liveState);
+  const operationState = normalizeSessionOperationState(input.detail?.operationState);
   return {
     agentBaseUrl: input.settings.agentBaseUrl,
     autoRefreshMs: input.settings.autoRefreshMs,
@@ -846,10 +940,10 @@ function buildViewState(input: {
     threads: input.threads,
     selectedThreadId: input.selectedThreadId,
     currentThread,
-    currentJobId: currentThread?.currentJobId || input.detail?.operationState.currentJobId || "",
+    currentJobId: currentThread?.currentJobId || operationState.currentJobId || "",
     events: input.detail?.events ?? [],
-    live: input.detail?.liveState ?? emptySessionLiveState(),
-    operation: input.detail?.operationState ?? emptySessionOperationState(),
+    live: liveState,
+    operation: operationState,
     derived: deriveThreadState(input.detail, input.errorMessage),
   };
 }
@@ -1009,6 +1103,125 @@ function emptySessionOperationState(): AgentPanelThreadDetail["operationState"] 
     runTopErrors: [],
     currentJobFiles: [],
     lastError: "",
+  };
+}
+
+function normalizeSessionLiveState(
+  value: AgentPanelThreadDetail["liveState"] | undefined,
+): AgentPanelThreadDetail["liveState"] {
+  const fallback = emptySessionLiveState();
+  const input = objectValue(value);
+  const composer = objectValue(input.composer);
+  const focus = objectValue(input.focus);
+  const activity = objectValue(input.activity);
+  const reasoning = objectValue(input.reasoning);
+  const plan = objectValue(input.plan);
+  const tools = objectValue(input.tools);
+  const terminal = objectValue(input.terminal);
+  const workspace = objectValue(input.workspace);
+  return {
+    participants: objectArray(input.participants).map((item) => ({
+      participantId: text(item.participantId),
+      clientType: text(item.clientType),
+      displayName: text(item.displayName),
+      active: item.active === true,
+      lastSeenAt: numberValue(item.lastSeenAt),
+    })),
+    composer: {
+      draftText: firstNonEmptyText(text(composer.draftText), fallback.composer.draftText),
+      isTyping: composer.isTyping === true,
+      updatedAt: numberValue(composer.updatedAt) || fallback.composer.updatedAt,
+    },
+    focus: {
+      activeFilePath: firstNonEmptyText(text(focus.activeFilePath), fallback.focus.activeFilePath),
+      selection: firstNonEmptyText(text(focus.selection), fallback.focus.selection),
+      patchPath: firstNonEmptyText(text(focus.patchPath), fallback.focus.patchPath),
+      runErrorPath: firstNonEmptyText(text(focus.runErrorPath), fallback.focus.runErrorPath),
+      runErrorLine: numberValue(focus.runErrorLine) || fallback.focus.runErrorLine,
+      updatedAt: numberValue(focus.updatedAt) || fallback.focus.updatedAt,
+    },
+    activity: {
+      phase: firstNonEmptyText(text(activity.phase), fallback.activity.phase),
+      summary: firstNonEmptyText(text(activity.summary), fallback.activity.summary),
+      updatedAt: numberValue(activity.updatedAt) || fallback.activity.updatedAt,
+    },
+    reasoning: {
+      title: firstNonEmptyText(text(reasoning.title), fallback.reasoning.title),
+      summary: firstNonEmptyText(text(reasoning.summary), fallback.reasoning.summary),
+      sourceKind: firstNonEmptyText(text(reasoning.sourceKind), fallback.reasoning.sourceKind),
+      updatedAt: numberValue(reasoning.updatedAt) || fallback.reasoning.updatedAt,
+    },
+    plan: {
+      summary: firstNonEmptyText(text(plan.summary), fallback.plan.summary),
+      items: objectArray(plan.items).map((item) => ({
+        id: text(item.id),
+        label: text(item.label),
+        status: text(item.status),
+        detail: text(item.detail),
+        updatedAt: numberValue(item.updatedAt),
+      })),
+      updatedAt: numberValue(plan.updatedAt) || fallback.plan.updatedAt,
+    },
+    tools: {
+      currentLabel: firstNonEmptyText(text(tools.currentLabel), fallback.tools.currentLabel),
+      currentStatus: firstNonEmptyText(text(tools.currentStatus), fallback.tools.currentStatus),
+      activities: objectArray(tools.activities).map((item) => ({
+        kind: text(item.kind),
+        label: text(item.label),
+        status: text(item.status),
+        detail: text(item.detail),
+        at: numberValue(item.at),
+      })),
+      updatedAt: numberValue(tools.updatedAt) || fallback.tools.updatedAt,
+    },
+    terminal: {
+      status: firstNonEmptyText(text(terminal.status), fallback.terminal.status),
+      profileId: firstNonEmptyText(text(terminal.profileId), fallback.terminal.profileId),
+      label: firstNonEmptyText(text(terminal.label), fallback.terminal.label),
+      command: firstNonEmptyText(text(terminal.command), fallback.terminal.command),
+      summary: firstNonEmptyText(text(terminal.summary), fallback.terminal.summary),
+      excerpt: firstNonEmptyText(text(terminal.excerpt), fallback.terminal.excerpt),
+      output: firstNonEmptyText(text(terminal.output), fallback.terminal.output),
+      updatedAt: numberValue(terminal.updatedAt) || fallback.terminal.updatedAt,
+    },
+    workspace: {
+      rootPath: firstNonEmptyText(text(workspace.rootPath), fallback.workspace.rootPath),
+      activeFilePath: firstNonEmptyText(text(workspace.activeFilePath), fallback.workspace.activeFilePath),
+      patchFiles: parseStringList(workspace.patchFiles),
+      changedFiles: parseStringList(workspace.changedFiles),
+      updatedAt: numberValue(workspace.updatedAt) || fallback.workspace.updatedAt,
+    },
+  };
+}
+
+function normalizeSessionOperationState(
+  value: AgentPanelThreadDetail["operationState"] | undefined,
+): AgentPanelThreadDetail["operationState"] {
+  const fallback = emptySessionOperationState();
+  const input = objectValue(value);
+  return {
+    currentJobId: firstNonEmptyText(text(input.currentJobId), fallback.currentJobId),
+    phase: firstNonEmptyText(text(input.phase), fallback.phase),
+    patchSummary: firstNonEmptyText(text(input.patchSummary), fallback.patchSummary),
+    patchFileCount: numberValue(input.patchFileCount) || fallback.patchFileCount,
+    patchFiles: parseStringList(input.patchFiles),
+    patchResultStatus: firstNonEmptyText(text(input.patchResultStatus), fallback.patchResultStatus),
+    patchResultMessage: firstNonEmptyText(text(input.patchResultMessage), fallback.patchResultMessage),
+    runProfileId: firstNonEmptyText(text(input.runProfileId), fallback.runProfileId),
+    runLabel: firstNonEmptyText(text(input.runLabel), fallback.runLabel),
+    runCommand: firstNonEmptyText(text(input.runCommand), fallback.runCommand),
+    runStatus: firstNonEmptyText(text(input.runStatus), fallback.runStatus),
+    runSummary: firstNonEmptyText(text(input.runSummary), fallback.runSummary),
+    runExcerpt: firstNonEmptyText(text(input.runExcerpt), fallback.runExcerpt),
+    runOutput: firstNonEmptyText(text(input.runOutput), fallback.runOutput),
+    runChangedFiles: parseStringList(input.runChangedFiles),
+    runTopErrors: objectArray(input.runTopErrors).map((item) => ({
+      path: text(item.path),
+      line: numberValue(item.line),
+      message: text(item.message),
+    })),
+    currentJobFiles: parseStringList(input.currentJobFiles),
+    lastError: firstNonEmptyText(text(input.lastError), fallback.lastError),
   };
 }
 

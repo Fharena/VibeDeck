@@ -252,6 +252,7 @@ const commandRegistry = new Map();
 const panelMessages = [];
 const activeEditorListeners = [];
 const selectionListeners = [];
+const viewProviders = new Map();
 let panelMessageHandler = null;
 
 const fakePanel = {
@@ -274,9 +275,37 @@ const fakePanel = {
   dispose() {},
 };
 
+const fakeView = {
+  title: "공유 세션",
+  description: "",
+  visible: true,
+  show() {},
+  webview: {
+    html: "",
+    onDidReceiveMessage(listener) {
+      panelMessageHandler = listener;
+      return { dispose() {} };
+    },
+    async postMessage(message) {
+      panelMessages.push(message);
+      return true;
+    },
+  },
+};
+
 const fakeVscode = {
   commands: {
     async executeCommand(command, ...args) {
+      if (command === "workbench.view.extension.vibedeckBridge") {
+        const provider = viewProviders.get("vibedeckBridge.sharedThreads");
+        if (provider) {
+          await provider.resolveWebviewView(fakeView);
+        }
+        return undefined;
+      }
+      if (command === "vibedeckBridge.sharedThreads.focus") {
+        return undefined;
+      }
       return await commandRegistry.get(command)(...args);
     },
     registerCommand(command, callback) {
@@ -329,6 +358,14 @@ const fakeVscode = {
     createStatusBarItem() {
       return { text: "", tooltip: undefined, command: undefined, show() {}, dispose() {} };
     },
+    registerWebviewViewProvider(viewId, provider) {
+      viewProviders.set(viewId, provider);
+      return {
+        dispose() {
+          viewProviders.delete(viewId);
+        },
+      };
+    },
     createWebviewPanel() {
       return fakePanel;
     },
@@ -373,9 +410,10 @@ try {
   await fakeVscode.commands.executeCommand("vibedeckBridge.openThreadPanel");
   await tick();
 
-  assert.match(fakePanel.webview.html, /VibeDeck 세션/);
-  assert.match(fakePanel.webview.html, /대화/);
-  assert.match(fakePanel.webview.html, /파일과 포커스/);
+  assert.match(fakeView.webview.html, /VibeDeck 세션/);
+  assert.match(fakeView.webview.html, /대화/);
+  assert.match(fakeView.webview.html, /파일과 포커스/);
+  await waitFor(() => panelMessages.length > 0);
   assert.ok(panelMessages.length > 0, "panel should receive initial state");
 
   await panelMessageHandler({

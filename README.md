@@ -265,7 +265,7 @@ npm --prefix extensions/vibedeck-bridge run build
 6. local agent 자동 부트스트랩은 기본값 `vibedeckBridge.agent.autoStart=true`, `vibedeckBridge.agent.launchMode=auto`로 켜집니다.
 7. 저장소 checkout에서 extension을 직접 로드한 상태라면 `launchMode=auto`가 repo 레이아웃을 감지해 내부 `go_run` 경로를 올립니다. 응답이 없으면 `vibedeck_doctor.ps1`로 도구/경로 상태를 먼저 확인하세요.
 8. 별도 binary를 쓸 때는 `vibedeckBridge.agent.launchMode=binary`, `vibedeckBridge.agent.binaryPath=<agent executable>`만 지정하면 됩니다.
-9. `VibeDeck: Open Shared Threads`로 IDE 안에서 shared thread panel 열기
+9. `VibeDeck: Open Shared Threads`로 IDE 안에서 shared thread 사이드바 열기
 10. 수동 fallback이 필요할 때만 `VibeDeck: Copy Agent Env`로 bridge 주소를 복사해 외부 agent에 전달
 
 자동 부트스트랩에서 쓰는 핵심 설정:

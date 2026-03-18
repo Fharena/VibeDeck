@@ -31,9 +31,28 @@
     "onCommand:vibedeckBridge.probeCursorPromptSubmit",
     "onCommand:vibedeckBridge.submitCursorPrompt",
     "onCommand:vibedeckBridge.probeCursorChatStorage",
-    "onCommand:vibedeckBridge.inspectCursorChatLinks"
+    "onCommand:vibedeckBridge.inspectCursorChatLinks",
+    "onView:vibedeckBridge.sharedThreads"
   ],
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "vibedeckBridge",
+          "title": "VibeDeck",
+          "icon": "media/vibedeck-view.svg"
+        }
+      ]
+    },
+    "views": {
+      "vibedeckBridge": [
+        {
+          "type": "webview",
+          "id": "vibedeckBridge.sharedThreads",
+          "name": "공유 세션"
+        }
+      ]
+    },
     "commands": [
       {
         "command": "vibedeckBridge.startServer",

@@ -50,8 +50,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\vibedeck_doctor.ps1
 
 ## shared thread panel
 
-`VibeDeck: Open Shared Threads` 명령은 agent의 shared thread API를 읽는 IDE 패널을 엽니다.
-이 패널은 모바일 앱과 같은 thread/event 모델을 사용하므로, 같은 스레드 타임라인과 patch/run 결과를 IDE 안에서도 그대로 이어서 볼 수 있습니다.
+`VibeDeck: Open Shared Threads` 명령은 agent의 shared thread API를 읽는 IDE 사이드바 뷰를 엽니다. 사이드바 뷰를 열 수 없는 환경에서는 에디터 웹뷰로 fallback 됩니다.
+이 뷰는 모바일 앱과 같은 thread/event 모델을 사용하므로, 같은 스레드 타임라인과 patch/run 결과를 IDE 안에서도 그대로 이어서 볼 수 있습니다.
 패치가 없으면 적용 불가 사유를 바로 보여주고, 실행 결과 카드에는 현재 job 기준 파일 목록을 raw 출력보다 먼저 노출합니다. agent가 HTTP 400과 함께 `CMD_ACK false`를 돌려줘도 해당 사유를 패널에 복구해 표시합니다.
 
 주요 설정:

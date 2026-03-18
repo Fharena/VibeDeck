@@ -236,6 +236,10 @@
   - 대화 타임라인을 말풍선형 메시지 피드로 바꾸고, composer를 하단 작업창처럼 정리
   - `검토`, `실행`, `파일과 포커스`는 우측 레일로 눌러 메인 채팅 흐름 오염을 줄임
   - 검증: `npm --prefix extensions/vibedeck-bridge run build` 통과, `npm --prefix extensions/vibedeck-bridge run smoke:panel` 통과
+- 2026-03-18 / Cursor shared threads 사이드패널 전환과 빈 화면 수정
+  - `Open Shared Threads`를 에디터 탭 fallback이 아닌 사이드바 webview view를 우선 여는 구조로 바꿈
+  - 실제 session live state가 일부 비어 있어도 렌더가 죽지 않도록 live/operation state를 기본값으로 정규화
+  - 검증: `npm --prefix extensions/vibedeck-bridge run build` 통과, `npm --prefix extensions/vibedeck-bridge run smoke:panel` 통과
 
 ## 다음 작업 우선순위
 
