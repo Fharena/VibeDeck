@@ -25,8 +25,17 @@ void main() {
     expect(find.text('패치 검토'), findsOneWidget);
     expect(find.text('실행 확인'), findsOneWidget);
     expect(find.text('데모 점검 실행'), findsOneWidget);
+    expect(find.text('파일별 선택'), findsOneWidget);
     expect(find.text('작업 로그'), findsWidgets);
     expect(find.text('보내기'), findsOneWidget);
+
+    await tester.tap(find.text('파일별 선택'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('선택 적용'), findsOneWidget);
+    expect(find.text('전체 시트 보기'), findsOneWidget);
+    expect(find.text('mobile/flutter_app/lib/app.dart'), findsWidgets);
+    expect(find.text('status modified / 헝크 1개'), findsOneWidget);
 
     await tester.tap(find.byIcon(Icons.menu_rounded));
     await tester.pumpAndSettle();
@@ -242,6 +251,34 @@ class _FakeShellAgentApi extends AgentApi {
           'body': '먼저 인증 가드와 최근 실패 테스트 출력을 확인하고 있습니다.',
           'data': const <String, dynamic>{},
           'at': 1710601260000,
+        },
+        {
+          'id': 'event-patch',
+          'threadId': 'thread-auth',
+          'jobId': 'job-auth',
+          'kind': 'patch_ready',
+          'role': 'assistant',
+          'title': '패치 준비',
+          'body': '인증 미들웨어 상태 카드만 먼저 정리하는 초안입니다.',
+          'data': {
+            'summary': '인증 미들웨어 상태 카드를 한 파일에서만 먼저 정리합니다.',
+            'files': [
+              {
+                'path': 'mobile/flutter_app/lib/app.dart',
+                'status': 'modified',
+                'hunks': [
+                  {
+                    'hunkId': 'hunk-1',
+                    'header': '@@ build status card @@',
+                    'diff': '- old status card\n+ compact status card',
+                    'risk': 'low',
+                  },
+                ],
+              },
+            ],
+            'fileCount': 1,
+          },
+          'at': 1710601265000,
         },
       ],
       'liveState': {
