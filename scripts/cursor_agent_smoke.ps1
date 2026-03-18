@@ -240,6 +240,104 @@ function Get-CursorAgentLoginHint {
     }
     return $Invocation.NestedBinary + ' login'
 }
+
+function Invoke-GoBuild {
+    param(
+        [Parameter(Mandatory = $true)][string]$GoCommandPath,
+        [Parameter(Mandatory = $true)][string]$RepoRoot,
+        [Parameter(Mandatory = $true)][string]$OutputPath
+    )
+
+    Push-Location $RepoRoot
+    try {
+        & $GoCommandPath build "-buildvcs=false" "-o" $OutputPath "./cmd/agent"
+        if ($LASTEXITCODE -ne 0) {
+            throw "agent binary build failed: exit $LASTEXITCODE"
+        }
+    } finally {
+        Pop-Location
+    }
+}
+
+function Start-AgentBinaryProcess {
+    param(
+        [Parameter(Mandatory = $true)][string]$BinaryPath,
+        [Parameter(Mandatory = $true)][string]$WorkingDirectory,
+        [Parameter(Mandatory = $true)][string]$ListenAddress,
+        [Parameter(Mandatory = $true)][string]$WorkspaceRoot,
+        [Parameter(Mandatory = $true)][string]$CursorAgentBin,
+        [Parameter(Mandatory = $true)][bool]$UseWslCursorAgent,
+        [string]$CursorAgentWslDistro = '',
+        [Parameter(Mandatory = $true)][string]$RunProfileFile,
+        [Parameter(Mandatory = $true)][string]$StdoutLog,
+        [Parameter(Mandatory = $true)][string]$StderrLog
+    )
+
+    $stdoutWriter = [System.IO.StreamWriter]::new($StdoutLog, $false, [System.Text.UTF8Encoding]::new($false))
+    $stderrWriter = [System.IO.StreamWriter]::new($StderrLog, $false, [System.Text.UTF8Encoding]::new($false))
+    $stdoutWriter.AutoFlush = $true
+    $stderrWriter.AutoFlush = $true
+
+    $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = $BinaryPath
+    $startInfo.WorkingDirectory = $WorkingDirectory
+    $startInfo.UseShellExecute = $false
+    $startInfo.CreateNoWindow = $true
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    $startInfo.Environment["AGENT_ADDR"] = $ListenAddress
+    $startInfo.Environment["WORKSPACE_ADAPTER_MODE"] = "cursor_agent_cli"
+    $startInfo.Environment["CURSOR_AGENT_BIN"] = $CursorAgentBin
+    $startInfo.Environment["CURSOR_AGENT_TRUST_WORKSPACE"] = "true"
+    $startInfo.Environment["CURSOR_AGENT_MODEL"] = "auto"
+    $startInfo.Environment["CURSOR_AGENT_USE_WSL"] = if ($UseWslCursorAgent) { "true" } else { "false" }
+    $startInfo.Environment["CURSOR_AGENT_WSL_DISTRO"] = $CursorAgentWslDistro
+    $startInfo.Environment["CURSOR_AGENT_WORKSPACE_ROOT"] = $WorkspaceRoot
+    $startInfo.Environment["RUN_PROFILE_FILE"] = $RunProfileFile
+    $startInfo.Environment["SIGNALING_BASE_URL"] = "http://127.0.0.1:8081"
+
+    $process = [System.Diagnostics.Process]::new()
+    $process.StartInfo = $startInfo
+
+    $stdoutHandler = [System.Diagnostics.DataReceivedEventHandler]{
+        param($sender, $eventArgs)
+        if ($null -ne $eventArgs.Data) {
+            $stdoutWriter.WriteLine($eventArgs.Data)
+        }
+    }
+    $stderrHandler = [System.Diagnostics.DataReceivedEventHandler]{
+        param($sender, $eventArgs)
+        if ($null -ne $eventArgs.Data) {
+            $stderrWriter.WriteLine($eventArgs.Data)
+        }
+    }
+
+    $process.add_OutputDataReceived($stdoutHandler)
+    $process.add_ErrorDataReceived($stderrHandler)
+
+    try {
+        if (-not $process.Start()) {
+            throw "agent process start failed"
+        }
+        $process.BeginOutputReadLine()
+        $process.BeginErrorReadLine()
+        return [PSCustomObject]@{
+            Process = $process
+            StdoutWriter = $stdoutWriter
+            StderrWriter = $stderrWriter
+            StdoutHandler = $stdoutHandler
+            StderrHandler = $stderrHandler
+        }
+    } catch {
+        $process.remove_OutputDataReceived($stdoutHandler)
+        $process.remove_ErrorDataReceived($stderrHandler)
+        $process.Dispose()
+        $stdoutWriter.Dispose()
+        $stderrWriter.Dispose()
+        throw
+    }
+}
+
 function Invoke-AgentJson {
     param(
         [Parameter(Mandatory = $true)][ValidateSet('GET','POST')][string]$Method,
@@ -342,12 +440,14 @@ $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("vibedeck-cursor-smoke-
 $workspaceRoot = Join-Path $tempRoot 'workspace'
 $logsDir = Join-Path $tempRoot 'logs'
 $profilesPath = Join-Path $tempRoot 'run-profiles.json'
-$agentScriptPath = Join-Path $tempRoot 'run-agent.cmd'
+$agentBinaryDir = Join-Path $tempRoot 'agent-bin'
+$agentBinaryPath = Join-Path $agentBinaryDir 'agent.exe'
 $stdoutLog = Join-Path $logsDir 'agent.stdout.log'
 $stderrLog = Join-Path $logsDir 'agent.stderr.log'
 
 New-Item -ItemType Directory -Force -Path $workspaceRoot | Out-Null
 New-Item -ItemType Directory -Force -Path $logsDir | Out-Null
+New-Item -ItemType Directory -Force -Path $agentBinaryDir | Out-Null
 
 Push-Location $workspaceRoot
 try {
@@ -370,26 +470,11 @@ $profilesJson = @{
 } | ConvertTo-Json -Depth 5
 [System.IO.File]::WriteAllText($profilesPath, $profilesJson, [System.Text.UTF8Encoding]::new($false))
 
-$scriptContent = @(
-    '@echo off',
-    ('set AGENT_ADDR={0}' -f $listenAddress),
-    'set WORKSPACE_ADAPTER_MODE=cursor_agent_cli',
-    ('set CURSOR_AGENT_BIN={0}' -f $cursorAgentInvocation.Binary),
-    'set CURSOR_AGENT_TRUST_WORKSPACE=true',
-    'set CURSOR_AGENT_MODEL=auto',
-    ('set CURSOR_AGENT_USE_WSL={0}' -f ($(if ($cursorAgentInvocation.UseWsl) { 'true' } else { 'false' }))),
-    ('set CURSOR_AGENT_WSL_DISTRO={0}' -f $cursorAgentInvocation.WslDistro),
-    ('set CURSOR_AGENT_WORKSPACE_ROOT={0}' -f $workspaceRoot),
-    ('set RUN_PROFILE_FILE={0}' -f $profilesPath),
-    ('set SIGNALING_BASE_URL=http://127.0.0.1:8081'),
-    ('"{0}" run ./cmd/agent 1>"{1}" 2>"{2}"' -f $goCommand.Source, $stdoutLog, $stderrLog)
-) -join "`r`n"
-[System.IO.File]::WriteAllText($agentScriptPath, $scriptContent + "`r`n", [System.Text.UTF8Encoding]::new($false))
-
-$agentProcess = $null
+$agentRuntime = $null
 try {
-    $agentProcess = Start-Process -FilePath $agentScriptPath -WorkingDirectory $repoRootResolved -PassThru -WindowStyle Hidden
-    $health = Wait-AgentReady -HealthUrl ($AgentBaseUrl.TrimEnd('/') + '/healthz') -Process $agentProcess -TimeoutSec $StartupTimeoutSec -StdErrLog $stderrLog
+    Invoke-GoBuild -GoCommandPath $goCommand.Source -RepoRoot $repoRootResolved -OutputPath $agentBinaryPath
+    $agentRuntime = Start-AgentBinaryProcess -BinaryPath $agentBinaryPath -WorkingDirectory $repoRootResolved -ListenAddress $listenAddress -WorkspaceRoot $workspaceRoot -CursorAgentBin $cursorAgentInvocation.Binary -UseWslCursorAgent $cursorAgentInvocation.UseWsl -CursorAgentWslDistro $cursorAgentInvocation.WslDistro -RunProfileFile $profilesPath -StdoutLog $stdoutLog -StderrLog $stderrLog
+    $health = Wait-AgentReady -HealthUrl ($AgentBaseUrl.TrimEnd('/') + '/healthz') -Process $agentRuntime.Process -TimeoutSec $StartupTimeoutSec -StdErrLog $stderrLog
     $adapter = Invoke-AgentJson -Method GET -Uri ($AgentBaseUrl.TrimEnd('/') + '/v1/agent/runtime/adapter')
 
     if ($adapter.name -ne 'cursor-agent-cli') {
@@ -422,6 +507,9 @@ try {
         if ($message -like '*Authentication required*') {
             $loginHint = Get-CursorAgentLoginHint -Invocation $cursorAgentInvocation
             throw "cursor-agent 인증이 필요합니다. 먼저 '$loginHint' 를 실행하거나 CURSOR_API_KEY 환경변수를 설정하세요."
+        }
+        if ($message -like '*resource_exhausted*' -or $message -like '*quota*' -or $message -like '*billing*') {
+            throw "cursor-agent가 resource_exhausted로 실패했습니다. Cursor 계정의 사용량 한도, 결제 상태, 동시 실행 제한을 확인하세요."
         }
         throw
     }
@@ -493,16 +581,38 @@ try {
         tempRoot = $tempRoot
     }
 } finally {
-    if ($agentProcess -and -not $agentProcess.HasExited) {
-        Stop-Process -Id $agentProcess.Id -Force
-        $agentProcess.WaitForExit()
+    if ($agentRuntime -and $agentRuntime.Process -and -not $agentRuntime.Process.HasExited) {
+        $agentRuntime.Process.Kill()
+        $agentRuntime.Process.WaitForExit()
     }
-    if ($agentProcess) {
+    if ($agentRuntime) {
         try {
-            $agentProcess.Dispose()
+            $agentRuntime.Process.CancelOutputRead()
         } catch {
         }
-        $agentProcess = $null
+        try {
+            $agentRuntime.Process.CancelErrorRead()
+        } catch {
+        }
+        Start-Sleep -Milliseconds 250
+        try {
+            $agentRuntime.Process.remove_OutputDataReceived($agentRuntime.StdoutHandler)
+            $agentRuntime.Process.remove_ErrorDataReceived($agentRuntime.StderrHandler)
+        } catch {
+        }
+        try {
+            $agentRuntime.Process.Dispose()
+        } catch {
+        }
+        try {
+            $agentRuntime.StdoutWriter.Dispose()
+        } catch {
+        }
+        try {
+            $agentRuntime.StderrWriter.Dispose()
+        } catch {
+        }
+        $agentRuntime = $null
         Start-Sleep -Milliseconds 500
     }
     if (-not $KeepTempRoot -and (Test-Path $tempRoot)) {
