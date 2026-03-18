@@ -274,7 +274,6 @@ class DefaultThreadPanelController implements ThreadPanelController {
     }
     view.webview.options = {
       enableScripts: true,
-      retainContextWhenHidden: true,
     };
     const nonce = randomBytes(16).toString("hex");
     view.webview.html = renderThreadPanelHtml(nonce);
