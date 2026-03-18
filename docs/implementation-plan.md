@@ -215,23 +215,23 @@
   - review sheet는 기본 작업 표면이 아니라 전체 diff/실행 기록을 보는 상세 시트 역할로 축소
   - smoke는 메인 피드에서 `파일별 선택 -> 선택 적용 surface 노출` 흐름을 기준으로 갱신
   - 검증: `flutter analyze` 통과, 안전 경로 `flutter test test/app_smoke_test.dart` 통과
+- 2026-03-18 / 모바일 터미널 상태와 에러 포인터 표면 강화
+  - 메인 피드 workstream 카드에 `최근 터미널` surface를 추가해 최근 실행 상태, 명령, 요약, 출력 미리보기를 함께 노출
+  - 터미널 시트에서 상위 에러 위치와 최근 파일을 바로 열 수 있게 연결하고, 작업 로그 이벤트에도 명령/출력/상위 에러를 함께 보여주도록 정리
+  - 검증: 안전 경로 `flutter analyze` 통과, 안전 경로 `flutter test test/app_smoke_test.dart` 통과
 
 ## 다음 작업 우선순위
 
-1. 세션 UX 기반 정리
-   - 터미널 live state 및 이벤트 스키마를 IDE/mobile 양쪽에서 동일하게 다듬기
-   - 실행 결과, 최근 명령, 에러 포인터를 메인 피드와 터미널 표면 사이에서 더 자연스럽게 이어주기
-2. Cursor 패널 재구성
-   - panel을 `채팅 + 작업 로그 + 터미널 + 파일 트리` 중심 레이아웃으로 개편
-   - 현재 thread viewer 성격을 shared session workspace surface로 승격
-3. 실시간 터미널/파일 포커스 동기화
-   - Cursor와 모바일이 같은 terminal tail / focused file / changed files를 공유
-   - 작업 전환 시 focus/selection/error pointer가 양쪽에서 같은 타이밍으로 보이게 정리
-4. Cursor 세션 복원/로그 가시성 + stalled recovery
-5. Windows smoke cleanup/agent 잠금 이슈 정리
-6. control timeout budget 운영 설정 외부화
-7. 설치 산출물 버전 관리/릴리스 자동화
-8. Cursor 외 provider(Codex/Claude Code/Antigravity) 확장용 adapter mode 정리
+1. 실시간 터미널/파일 포커스 동기화 마감
+   - Cursor와 모바일이 같은 terminal tail / focused file / changed files를 더 촘촘하게 공유
+   - selection/error pointer 갱신 타이밍과 최근 실행 문맥을 양쪽에서 맞추기
+2. Cursor 세션 복원/로그 가시성 + stalled recovery
+   - reconnect 이후 reasoning/tool/run 기록 복원이 자연스럽게 이어지도록 정리
+   - 오래 멈춘 세션 감지와 복구 안내를 shared session 흐름 안에서 다듬기
+3. Windows smoke cleanup/agent 잠금 이슈 정리
+4. control timeout budget 운영 설정 외부화
+5. 설치 산출물 버전 관리/릴리스 자동화
+6. Cursor 외 provider(Codex/Claude Code/Antigravity) 확장용 adapter mode 정리
 
 주의:
 - provider 확장은 Cursor 기반 unified session 흐름이 충분히 완성된 뒤에 진행한다.
