@@ -101,6 +101,9 @@ class AppController extends ChangeNotifier {
   SessionSyncStatus sessionSyncStatus = SessionSyncStatus.idle;
   String sessionSyncDetail = '';
   int sessionLastSyncedAt = 0;
+  UnmodifiableListView<SessionSyncLogEntryView> get sessionSyncLogs =>
+      UnmodifiableListView(_sessionSyncLogs);
+  final List<SessionSyncLogEntryView> _sessionSyncLogs = [];
   final Map<String, List<WorkspaceTreeEntryView>> _workspaceTreeByPath = {};
   Timer? _workspaceTreeRefreshTimer;
   WorkspaceFileContentView workspaceFile = const WorkspaceFileContentView();
@@ -260,6 +263,45 @@ class AppController extends ChangeNotifier {
     }
   }
 
+  String get sessionSyncNextAction {
+    switch (sessionSyncStatus) {
+      case SessionSyncStatus.stale:
+        return '세션 새로고침이나 다시 연결로 마지막 작업 위치를 확인하세요.';
+      case SessionSyncStatus.reconnecting:
+        return '복구가 끝날 때까지 기다리거나, 오래 멈추면 세션 새로고침을 눌러 주세요.';
+      case SessionSyncStatus.failed:
+        return '마지막 작업 위치를 확인한 뒤 다시 연결하거나, 필요하면 프롬프트를 다시 제출하세요.';
+      case SessionSyncStatus.live:
+        return hasRecentSessionSyncLogs
+            ? '방금 복구된 세션입니다. 아래 로그로 어디서 끊겼는지 확인할 수 있습니다.'
+            : '세션이 정상적으로 실시간 동기화되고 있습니다.';
+      case SessionSyncStatus.idle:
+        return hasSessionSyncTarget
+            ? '세션 연결 준비가 끝나면 실시간 상태와 복구 로그가 여기에 표시됩니다.'
+            : '세션을 선택하면 복구 상태를 추적합니다.';
+    }
+  }
+
+  String get sessionSyncAttemptLabel {
+    if (_sessionSyncReconnectAttempts <= 0) {
+      return '재시도 없음';
+    }
+    return '재시도 $_sessionSyncReconnectAttempts/$_sessionSyncMaxReconnectAttempts';
+  }
+
+  bool get hasRecentSessionSyncLogs {
+    if (_sessionSyncLogs.isEmpty) {
+      return false;
+    }
+    final now = DateTime.now().millisecondsSinceEpoch;
+    const recentWindow = Duration(minutes: 5);
+    return _sessionSyncLogs.any(
+      (entry) =>
+          now - entry.atMillis <= recentWindow.inMilliseconds &&
+          (entry.kind != 'live' || entry.title == '연결 복구 완료'),
+    );
+  }
+
   String get sessionLastSyncedLabel {
     if (sessionLastSyncedAt <= 0) {
       return '아직 동기화 기록 없음';
@@ -399,6 +441,7 @@ class AppController extends ChangeNotifier {
     topErrors.clear();
     _patchFiles.clear();
     _threadEvents.clear();
+    _sessionSyncLogs.clear();
     _clearWorkspaceBrowserState();
     _promptDraftSyncTimer?.cancel();
     _resetSessionSyncState(shouldNotify: false);
@@ -409,6 +452,7 @@ class AppController extends ChangeNotifier {
   Future<void> selectThread(String threadId) {
     currentThreadId = threadId.trim();
     _patchFiles.clear();
+    _sessionSyncLogs.clear();
     _clearWorkspaceBrowserState();
     return _run('스레드 로드', () async {
       await _refreshThreadDetail();
@@ -1073,6 +1117,11 @@ class AppController extends ChangeNotifier {
     _sessionSyncRetryTimer = null;
     if (manual) {
       _sessionSyncReconnectAttempts = 0;
+      _recordSessionSyncLog(
+        kind: 'manual',
+        title: '수동 다시 연결',
+        detail: '사용자가 세션 연결을 다시 시작했습니다.',
+      );
     }
 
     _markSessionSyncReconnecting(
@@ -1093,8 +1142,21 @@ class AppController extends ChangeNotifier {
 
     final detail = _sessionSyncRecoveryDetail(error, source: source);
     if (source == 'watchdog') {
+      _recordSessionSyncLog(
+        kind: 'stale',
+        title: '멈춤 감지',
+        detail: detail,
+      );
       _markSessionSyncStale(detail: detail);
     } else {
+      final nextAttempt = _sessionSyncReconnectAttempts + 1;
+      _recordSessionSyncLog(
+        kind: 'reconnecting',
+        title: '복구 시도',
+        detail: nextAttempt > _sessionSyncMaxReconnectAttempts
+            ? detail
+            : '$detail ($nextAttempt/$_sessionSyncMaxReconnectAttempts)',
+      );
       _markSessionSyncReconnecting(detail: detail);
     }
 
@@ -1102,6 +1164,11 @@ class AppController extends ChangeNotifier {
       return;
     }
     if (_sessionSyncReconnectAttempts >= _sessionSyncMaxReconnectAttempts) {
+      _recordSessionSyncLog(
+        kind: 'failed',
+        title: '복구 실패',
+        detail: detail,
+      );
       _markSessionSyncFailed(detail: detail);
       return;
     }
@@ -1166,10 +1233,25 @@ class AppController extends ChangeNotifier {
       return;
     }
 
+    final previousStatus = sessionSyncStatus;
+    final hadLastSync = sessionLastSyncedAt > 0;
     _sessionSyncReconnectAttempts = 0;
     sessionSyncStatus = SessionSyncStatus.live;
     sessionSyncDetail = '';
     sessionLastSyncedAt = DateTime.now().millisecondsSinceEpoch;
+    if (!hadLastSync) {
+      _recordSessionSyncLog(
+        kind: 'live',
+        title: '실시간 연결 시작',
+        detail: '공유 세션 동기화를 시작했습니다.',
+      );
+    } else if (previousStatus != SessionSyncStatus.live) {
+      _recordSessionSyncLog(
+        kind: 'live',
+        title: '연결 복구 완료',
+        detail: '세션 업데이트 수신이 다시 이어졌습니다.',
+      );
+    }
     _armSessionSyncWatchdog();
     if (shouldNotify) {
       notifyListeners();
@@ -1226,6 +1308,56 @@ class AppController extends ChangeNotifier {
       return '세션 동기화 요청이 실패했습니다. [${error.statusCode}] ${error.message}';
     }
     return '세션 연결이 끊기면 복구를 시도합니다.';
+  }
+
+  void _recordSessionSyncLog({
+    required String kind,
+    required String title,
+    required String detail,
+  }) {
+    final trimmedTitle = title.trim();
+    final trimmedDetail = detail.trim();
+    if (trimmedTitle.isEmpty && trimmedDetail.isEmpty) {
+      return;
+    }
+
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final entry = SessionSyncLogEntryView(
+      kind: kind,
+      title: trimmedTitle,
+      detail: trimmedDetail,
+      atMillis: now,
+    );
+
+    if (_sessionSyncLogs.isNotEmpty) {
+      final latest = _sessionSyncLogs.first;
+      if (latest.kind == entry.kind &&
+          latest.title == entry.title &&
+          latest.detail == entry.detail &&
+          now - latest.atMillis < 1500) {
+        _sessionSyncLogs[0] = entry;
+        return;
+      }
+    }
+
+    _sessionSyncLogs.insert(0, entry);
+    if (_sessionSyncLogs.length > 6) {
+      _sessionSyncLogs.removeRange(6, _sessionSyncLogs.length);
+    }
+  }
+
+  @visibleForTesting
+  void debugPushSessionSyncLog({
+    required String kind,
+    required String title,
+    required String detail,
+  }) {
+    _recordSessionSyncLog(
+      kind: kind,
+      title: title,
+      detail: detail,
+    );
+    notifyListeners();
   }
 
   String _formatSessionSyncTimestamp(int value) {
@@ -2449,6 +2581,31 @@ class SessionParticipantView {
           ? (map['lastSeenAt'] as num).toInt()
           : int.tryParse(map['lastSeenAt']?.toString() ?? '') ?? 0,
     );
+  }
+}
+
+class SessionSyncLogEntryView {
+  const SessionSyncLogEntryView({
+    required this.kind,
+    required this.title,
+    required this.detail,
+    required this.atMillis,
+  });
+
+  final String kind;
+  final String title;
+  final String detail;
+  final int atMillis;
+
+  String get atLabel {
+    if (atMillis <= 0) {
+      return '-';
+    }
+    final local = DateTime.fromMillisecondsSinceEpoch(atMillis).toLocal();
+    final hh = local.hour.toString().padLeft(2, '0');
+    final mm = local.minute.toString().padLeft(2, '0');
+    final ss = local.second.toString().padLeft(2, '0');
+    return '$hh:$mm:$ss';
   }
 }
 

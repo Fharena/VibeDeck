@@ -2,14 +2,15 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:vibedeck_mobile/app.dart';
-import 'package:vibedeck_mobile/services/agent_api.dart';
 import 'package:vibedeck_mobile/screens/workspace_browser.dart';
+import 'package:vibedeck_mobile/screens/prompt_screen.dart';
+import 'package:vibedeck_mobile/services/agent_api.dart';
 import 'package:vibedeck_mobile/state/app_controller.dart';
+import 'package:vibedeck_mobile/app.dart';
 
 void main() {
   testWidgets('드로어 기반 모바일 셸 흐름을 보여준다', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(800, 1200));
+    await tester.binding.setSurfaceSize(const Size(800, 1600));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     final controller = AppController(api: _FakeShellAgentApi());
@@ -103,6 +104,44 @@ void main() {
 
     controller.dispose();
     await tester.pump();
+  });
+
+  testWidgets('세션 복구 배너와 로그를 보여준다', (tester) async {
+    final controller = AppController(api: _FakeShellAgentApi());
+    addTearDown(controller.dispose);
+
+    controller.currentThreadId = 'thread-auth';
+    controller.sessionSyncStatus = SessionSyncStatus.failed;
+    controller.sessionSyncDetail =
+        '세션 동기화 요청이 실패했습니다. [503] session stream closed';
+    controller.debugPushSessionSyncLog(
+      kind: 'stale',
+      title: '멈춤 감지',
+      detail: '마지막 동기화 이후 새 업데이트가 없어 복구를 시도합니다.',
+    );
+    controller.debugPushSessionSyncLog(
+      kind: 'failed',
+      title: '복구 실패',
+      detail: '세션 동기화 요청이 실패했습니다. [503] session stream closed',
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: PromptScreen(controller: controller),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('다음 액션'), findsOneWidget);
+    expect(find.text('복구 로그'), findsOneWidget);
+    expect(find.text('멈춤 감지'), findsOneWidget);
+    expect(find.text('복구 실패'), findsOneWidget);
+    expect(
+      find.textContaining('마지막 작업 위치를 확인한 뒤 다시 연결하거나'),
+      findsOneWidget,
+    );
   });
 }
 
