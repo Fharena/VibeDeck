@@ -105,9 +105,23 @@ doctor는 `git/go/node/npm/flutter/editor CLI/cursor-agent/build 산출물/vsce`
 
 - 온보딩 가이드: [docs/onboarding.md](./docs/onboarding.md)
 
-### 빠른 실행
+### 가장 빠른 확인
 
-기본값은 fixture child-process bridge입니다.
+PC 세팅을 가장 빠르게 확인하려면 아래 순서를 권장합니다.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\vibedeck_doctor.ps1
+npm --prefix .\extensions\vibedeck-bridge run smoke:bootstrap
+powershell -ExecutionPolicy Bypass -File .\scripts\cursor_agent_smoke.ps1
+```
+
+- `vibedeck_doctor.ps1`: 도구 설치, build 산출물, WSL `cursor-agent`까지 한 번에 확인
+- `smoke:bootstrap`: extension의 local agent 자동 부트스트랩 경로 확인
+- `cursor_agent_smoke.ps1`: 실제 `cursor-agent` patch/apply/run 경로 확인
+
+### 수동 agent 실행
+
+기본 agent는 fixture child-process bridge를 사용하며, 직접 띄울 때는 아래처럼 실행합니다.
 
 ```bash
 npm --prefix adapters/cursor-bridge install
@@ -247,7 +261,7 @@ npm --prefix extensions/vibedeck-bridge run build
 4. Windows에서 Cursor CLI가 WSL에만 있으면 `vibedeckBridge.cursorAgent.useWsl=true`, 필요하면 `vibedeckBridge.cursorAgent.wslDistro=Ubuntu` 설정
 5. `.env.local` 같은 ignored 파일이 temp worktree snapshot에 필요하면 `vibedeckBridge.cursorAgent.syncIgnoredPaths=[".env.local"]`처럼 명시 allowlist로만 추가
 6. local agent 자동 부트스트랩은 기본값 `vibedeckBridge.agent.autoStart=true`, `vibedeckBridge.agent.launchMode=auto`로 켜집니다.
-7. 저장소 checkout에서 extension을 직접 로드한 상태라면 `launchMode=auto`가 repo 레이아웃을 감지해 `go run ./cmd/agent` 경로를 내부에서 올립니다.
+7. 저장소 checkout에서 extension을 직접 로드한 상태라면 `launchMode=auto`가 repo 레이아웃을 감지해 내부 `go_run` 경로를 올립니다. 응답이 없으면 `vibedeck_doctor.ps1`로 도구/경로 상태를 먼저 확인하세요.
 8. 별도 binary를 쓸 때는 `vibedeckBridge.agent.launchMode=binary`, `vibedeckBridge.agent.binaryPath=<agent executable>`만 지정하면 됩니다.
 9. `VibeDeck: Open Shared Threads`로 IDE 안에서 shared thread panel 열기
 10. 수동 fallback이 필요할 때만 `VibeDeck: Copy Agent Env`로 bridge 주소를 복사해 외부 agent에 전달
@@ -304,8 +318,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\gui_extension_host_smoke.ps1 
 - `gui_extension_host_smoke.ps1`로 실제 Cursor GUI extension host + real `cursor-agent` 경로까지 검증했습니다.
 - built-in provider와 Go `cursor_agent_cli` adapter는 둘 다 ignored 파일을 기본 비동기화로 두고, 명시 allowlist와 일치하는 항목만 temp worktree snapshot에 복사합니다.
 - 외부 대시보드용 Prometheus scrape endpoint(`/metrics`)와 control handler latency/timeout 메트릭을 제공합니다.
-- 현재 남은 큰 과제는 session UX foundation(reasoning summary/plan trace/tool activity/terminal/file tree), Cursor panel redesign, 모바일 dark session shell polish, Cursor 세션/로그 가시성 및 stalled recovery, Windows cleanup warning 정리, timeout budget 운영 설정 외부화, 설치 산출물 릴리스 자동화입니다.
-- Windows에서는 smoke 종료 직후 `agent.exe` 잠금 때문에 temp root cleanup warning이 남을 수 있습니다.
+- 현재 남은 큰 과제는 control timeout budget 운영 설정 외부화, 설치 산출물 릴리스 자동화, Cursor 외 provider 확장용 adapter mode 정리입니다.
+- Windows mock smoke는 이제 임시 agent binary를 직접 빌드해 실행하므로 기존 `agent.exe` 잠금 경고를 줄였습니다. 그래도 환경에 따라 temp root가 남으면 `-KeepTempRoot`로 산출물을 보존해 원인을 확인하세요.
 - Cursor 외 provider 확장은 Cursor 기반 unified session 흐름을 충분히 완성한 뒤 진행할 계획입니다.
 
 ### VSIX 패키징

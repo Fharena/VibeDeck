@@ -1330,7 +1330,7 @@ function collectSetupGuidance(options: {
 
   if (!options.connected && options.agentStatus.launchMode === "manual") {
     addAction(
-      "로컬 agent 자동 실행을 쓰려면 VibeDeck 저장소를 작업 폴더로 열어 `go_run`을 쓰거나, `vibedeckBridge.agent.launchMode=binary`와 `vibedeckBridge.agent.binaryPath`를 설정하세요.",
+      "로컬 agent 자동 실행을 쓰려면 VibeDeck 저장소를 작업 폴더로 열고 `vibedeck_doctor.ps1`로 상태를 확인하세요. 별도 실행 파일을 쓸 때는 `vibedeckBridge.agent.launchMode=binary`와 `vibedeckBridge.agent.binaryPath`를 설정하세요.",
     );
   }
 
