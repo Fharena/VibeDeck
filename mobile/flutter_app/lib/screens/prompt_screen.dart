@@ -81,6 +81,46 @@ String _planStatusLabel(String value) {
   }
 }
 
+class _ErrorLocation {
+  const _ErrorLocation({
+    required this.path,
+    required this.line,
+    required this.message,
+  });
+
+  final String path;
+  final int line;
+  final String message;
+}
+
+_ErrorLocation? _parseErrorLocation(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) {
+    return null;
+  }
+
+  final match = RegExp(r'^(.+?):(\d+)\s*(.*)$').firstMatch(trimmed);
+  if (match == null) {
+    return null;
+  }
+
+  return _ErrorLocation(
+    path: match.group(1)?.trim() ?? '',
+    line: int.tryParse(match.group(2) ?? '') ?? 1,
+    message: match.group(3)?.trim() ?? '',
+  );
+}
+
+String _terminalOutputPreview(String value, {int maxLines = 3}) {
+  final lines = value
+      .split('\n')
+      .map((line) => line.trimRight())
+      .where((line) => line.trim().isNotEmpty)
+      .take(maxLines)
+      .toList();
+  return lines.join('\n').trim();
+}
+
 class PromptScreen extends StatefulWidget {
   const PromptScreen({
     super.key,
@@ -151,6 +191,8 @@ class _PromptScreenState extends State<PromptScreen> {
                     onApplyAllPatch: _applyAllPatchFromFeed,
                     onApplySelectedPatch: _applySelectedPatchFromFeed,
                     onRunPrimaryProfile: _runPrimaryProfileFromFeed,
+                    onOpenTerminal: _showTerminalSheet,
+                    onOpenTopError: _openTopErrorFromFeed,
                     patchSelectionExpanded: _inlinePatchSelectionExpanded,
                     selectedPatchHunksByPath: _selectedPatchHunksByPath,
                     onTogglePatchSelectionExpanded: _toggleInlinePatchSelection,
@@ -332,6 +374,28 @@ class _PromptScreenState extends State<PromptScreen> {
       title: '상세 패치와 실행',
       subtitle: '메인 피드에서는 핵심만 보고, 여기서는 전체 diff와 실행 기록을 자세히 봅니다.',
       child: ReviewScreen(controller: widget.controller),
+    );
+  }
+
+  Future<void> _showTerminalSheet() async {
+    await _showBottomSheet(
+      title: '터미널',
+      subtitle: '현재 세션에서 보고 있는 실행 상태와 최근 출력을 바로 확인합니다.',
+      child: TerminalSheet(controller: widget.controller),
+    );
+  }
+
+  Future<void> _openTopErrorFromFeed() async {
+    if (widget.controller.topErrors.isEmpty) {
+      return;
+    }
+    final target = _parseErrorLocation(widget.controller.topErrors.first);
+    if (target == null || target.path.isEmpty) {
+      return;
+    }
+    await widget.controller.openWorkspaceLocation(
+      target.path,
+      line: target.line <= 0 ? 1 : target.line,
     );
   }
 
@@ -671,6 +735,8 @@ class _WorkstreamCard extends StatelessWidget {
     required this.onApplyAllPatch,
     required this.onApplySelectedPatch,
     required this.onRunPrimaryProfile,
+    required this.onOpenTerminal,
+    required this.onOpenTopError,
     required this.patchSelectionExpanded,
     required this.selectedPatchHunksByPath,
     required this.onTogglePatchSelectionExpanded,
@@ -682,6 +748,8 @@ class _WorkstreamCard extends StatelessWidget {
   final Future<void> Function() onApplyAllPatch;
   final Future<void> Function() onApplySelectedPatch;
   final Future<void> Function() onRunPrimaryProfile;
+  final Future<void> Function() onOpenTerminal;
+  final Future<void> Function() onOpenTopError;
   final bool patchSelectionExpanded;
   final Map<String, Set<String>> selectedPatchHunksByPath;
   final VoidCallback onTogglePatchSelectionExpanded;
@@ -721,6 +789,30 @@ class _WorkstreamCard extends StatelessWidget {
       0,
       (sum, item) => sum + item.length,
     );
+    final terminal = controller.liveSession.terminal;
+    final terminalStatus = _firstNonEmptyText(
+      [terminal.status, controller.runStatus],
+      fallback: '대기 중',
+    );
+    final terminalCommand = _firstNonEmptyText([
+      terminal.command,
+      controller.sessionOperation.runCommand,
+    ]);
+    final terminalSummary = _firstNonEmptyText([
+      terminal.summary,
+      controller.runSummary,
+    ], fallback: '최근 실행 결과가 아직 없습니다.');
+    final terminalPreview = _terminalOutputPreview(
+      _firstNonEmptyText([
+        terminal.output,
+        terminal.excerpt,
+        controller.runOutput,
+        controller.runExcerpt,
+      ]),
+    );
+    final primaryError = controller.topErrors.isEmpty
+        ? null
+        : _parseErrorLocation(controller.topErrors.first);
     final runSummary = controller.runSummary.isNotEmpty
         ? controller.runSummary
         : (primaryProfile == null
@@ -878,6 +970,16 @@ class _WorkstreamCard extends StatelessWidget {
                   secondaryActionLabel: '상세 보기',
                   onSecondaryAction: onOpenReview,
                 ),
+                const SizedBox(height: 10),
+                _InlineTerminalSurface(
+                  status: terminalStatus,
+                  command: terminalCommand,
+                  summary: terminalSummary,
+                  outputPreview: terminalPreview,
+                  primaryError: primaryError,
+                  onOpenTerminal: onOpenTerminal,
+                  onOpenTopError: primaryError == null ? null : onOpenTopError,
+                ),
               ],
             ),
           ),
@@ -935,6 +1037,10 @@ class TerminalSheet extends StatelessWidget {
       ...controller.runChangedFiles,
       ...controller.currentJobFiles,
     ]);
+    final primaryError = controller.topErrors.isEmpty
+        ? null
+        : _parseErrorLocation(controller.topErrors.first);
+    final primaryFile = recentFiles.isEmpty ? '' : recentFiles.first;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
@@ -966,12 +1072,54 @@ class TerminalSheet extends StatelessWidget {
         const SizedBox(height: 12),
         _StreamSurface(
           label: '실행 요약',
-          child: Text(
-            summary,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: const Color(0xFFDCE6F2),
-                  height: 1.45,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                summary,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: const Color(0xFFDCE6F2),
+                      height: 1.45,
+                    ),
+              ),
+              if (primaryError != null || primaryFile.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    if (primaryError != null)
+                      OutlinedButton.icon(
+                        onPressed: () async {
+                          await controller.openWorkspaceLocation(
+                            primaryError.path,
+                            line:
+                                primaryError.line <= 0 ? 1 : primaryError.line,
+                          );
+                        },
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFFDCE6F2),
+                          side: const BorderSide(color: Color(0xFF32404D)),
+                        ),
+                        icon: const Icon(Icons.my_location_outlined),
+                        label: const Text('상위 에러 열기'),
+                      ),
+                    if (primaryFile.isNotEmpty)
+                      FilledButton.tonalIcon(
+                        onPressed: () async {
+                          await controller.openWorkspaceLocation(primaryFile);
+                        },
+                        style: FilledButton.styleFrom(
+                          foregroundColor: const Color(0xFFF4F7FB),
+                          backgroundColor: const Color(0xFF213244),
+                        ),
+                        icon: const Icon(Icons.insert_drive_file_outlined),
+                        label: const Text('최근 파일 열기'),
+                      ),
+                  ],
                 ),
+              ],
+            ],
           ),
         ),
         if (command.isNotEmpty) ...[
@@ -1731,6 +1879,120 @@ class _InlinePatchFileCard extends StatelessWidget {
   }
 }
 
+class _InlineTerminalSurface extends StatelessWidget {
+  const _InlineTerminalSurface({
+    required this.status,
+    required this.command,
+    required this.summary,
+    required this.outputPreview,
+    required this.primaryError,
+    required this.onOpenTerminal,
+    required this.onOpenTopError,
+  });
+
+  final String status;
+  final String command;
+  final String summary;
+  final String outputPreview;
+  final _ErrorLocation? primaryError;
+  final Future<void> Function() onOpenTerminal;
+  final Future<void> Function()? onOpenTopError;
+
+  @override
+  Widget build(BuildContext context) {
+    return _StreamSurface(
+      label: '최근 터미널',
+      accent: const Color(0xFF8EB7FF),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _MetricPill(
+                icon: Icons.terminal_rounded,
+                label: status,
+                tone: status == 'failed'
+                    ? Theme.of(context).colorScheme.error
+                    : const Color(0xFF4E8DFF),
+              ),
+              if (command.isNotEmpty)
+                _MetricPill(
+                  icon: Icons.play_arrow_rounded,
+                  label: _compactPath(command, keep: 28),
+                  tone: const Color(0xFFE4B15A),
+                ),
+              if (primaryError != null)
+                _MetricPill(
+                  icon: Icons.error_outline,
+                  label: primaryError!.line > 0
+                      ? '${primaryError!.path}:${primaryError!.line}'
+                      : primaryError!.path,
+                  tone: Theme.of(context).colorScheme.error,
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            summary,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: const Color(0xFFDCE6F2),
+                  height: 1.45,
+                ),
+          ),
+          if (outputPreview.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: const Color(0xFF091017),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFF202A35)),
+              ),
+              padding: const EdgeInsets.all(12),
+              child: SelectableText(
+                outputPreview,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: const Color(0xFFEAF1F8),
+                      fontFamily: 'monospace',
+                      height: 1.4,
+                    ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              FilledButton.tonalIcon(
+                onPressed: onOpenTerminal,
+                style: FilledButton.styleFrom(
+                  foregroundColor: const Color(0xFFF4F7FB),
+                  backgroundColor: const Color(0xFF213244),
+                ),
+                icon: const Icon(Icons.terminal_rounded),
+                label: const Text('터미널 보기'),
+              ),
+              if (onOpenTopError != null)
+                OutlinedButton.icon(
+                  onPressed: onOpenTopError,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFFDCE6F2),
+                    side: const BorderSide(color: Color(0xFF32404D)),
+                  ),
+                  icon: const Icon(Icons.my_location_outlined),
+                  label: const Text('에러 열기'),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _PlanTrace extends StatelessWidget {
   const _PlanTrace({required this.items});
 
@@ -1818,6 +2080,27 @@ class _ThreadEventTile extends StatelessWidget {
         isUser ? const Color(0xFF244653) : const Color(0xFF263449);
     final iconColor =
         isUser ? const Color(0xFF7FD0B4) : const Color(0xFFB8C7FF);
+    final eventCommand = _firstNonEmptyText([
+      event.data['command']?.toString() ?? '',
+      event.data['label']?.toString() ?? '',
+    ]);
+    final eventOutputPreview = _terminalOutputPreview(_firstNonEmptyText([
+      event.data['output']?.toString() ?? '',
+      event.data['excerpt']?.toString() ?? '',
+    ]));
+    final eventErrors = event.data['topErrors'] is List
+        ? (event.data['topErrors'] as List)
+            .whereType<Map>()
+            .map((item) {
+              final path = item['path']?.toString() ?? '';
+              final line = item['line']?.toString() ?? '';
+              final message = item['message']?.toString() ?? '';
+              return path.isEmpty ? message : '$path:$line $message'.trim();
+            })
+            .where((line) => line.trim().isNotEmpty)
+            .take(2)
+            .toList()
+        : const <String>[];
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -1888,6 +2171,51 @@ class _ThreadEventTile extends StatelessWidget {
                     label: '파일 ${event.data['fileCount']}개',
                   ),
               ],
+            ),
+          ],
+          if (eventCommand.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0D141B),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFF202A35)),
+              ),
+              child: SelectableText(
+                eventCommand,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: const Color(0xFFEAF1F8),
+                      fontFamily: 'monospace',
+                      height: 1.4,
+                    ),
+              ),
+            ),
+          ],
+          if (eventOutputPreview.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              eventOutputPreview,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: const Color(0xFFB7C4D2),
+                    height: 1.4,
+                  ),
+            ),
+          ],
+          if (eventErrors.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            ...eventErrors.map(
+              (line) => Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(
+                  '• $line',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: const Color(0xFFFFD5D2),
+                        height: 1.35,
+                      ),
+                ),
+              ),
             ),
           ],
         ],

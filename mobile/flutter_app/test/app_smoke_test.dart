@@ -26,6 +26,9 @@ void main() {
     expect(find.text('실행 확인'), findsOneWidget);
     expect(find.text('데모 점검 실행'), findsOneWidget);
     expect(find.text('파일별 선택'), findsOneWidget);
+    expect(find.text('최근 터미널'), findsOneWidget);
+    expect(find.text('에러 열기'), findsOneWidget);
+    expect(find.textContaining('npm test -- --failed'), findsOneWidget);
     expect(find.text('작업 로그'), findsWidgets);
     expect(find.text('보내기'), findsOneWidget);
 
@@ -280,6 +283,46 @@ class _FakeShellAgentApi extends AgentApi {
           },
           'at': 1710601265000,
         },
+        {
+          'id': 'event-run-requested',
+          'threadId': 'thread-auth',
+          'jobId': 'job-auth',
+          'kind': 'run_requested',
+          'role': 'system',
+          'title': '실행 요청',
+          'body': '실패한 인증 케이스만 다시 확인합니다.',
+          'data': {
+            'profileId': 'test_all',
+            'label': '데모 점검',
+            'command': 'npm test -- --failed',
+          },
+          'at': 1710601270000,
+        },
+        {
+          'id': 'event-run-finished',
+          'threadId': 'thread-auth',
+          'jobId': 'job-auth',
+          'kind': 'run_finished',
+          'role': 'system',
+          'title': '실행 결과',
+          'body': '인증 미들웨어 테스트가 아직 실패합니다.',
+          'data': {
+            'status': 'failed',
+            'profileId': 'test_all',
+            'summary': '인증 미들웨어 테스트가 아직 실패합니다.',
+            'excerpt': 'FAIL auth middleware\nexpected 200 but got 401',
+            'output':
+                'FAIL auth middleware\nexpected 200 but got 401\nat middleware/auth_test.dart:27',
+            'topErrors': [
+              {
+                'path': 'middleware/auth_test.dart',
+                'line': 27,
+                'message': 'expected 200 but got 401',
+              },
+            ],
+          },
+          'at': 1710601275000,
+        },
       ],
       'liveState': {
         'composer': {
@@ -338,13 +381,14 @@ class _FakeShellAgentApi extends AgentApi {
           'updatedAt': 1710601295000,
         },
         'terminal': {
-          'status': 'idle',
+          'status': 'failed',
           'profileId': 'test_all',
           'label': '데모 점검',
-          'command': 'git status --short',
-          'summary': '패치 검토 뒤 실행 대기 중입니다.',
-          'excerpt': '',
-          'output': '',
+          'command': 'npm test -- --failed',
+          'summary': '인증 미들웨어 테스트가 아직 실패합니다.',
+          'excerpt': 'FAIL auth middleware\nexpected 200 but got 401',
+          'output':
+              'FAIL auth middleware\nexpected 200 but got 401\nat middleware/auth_test.dart:27',
           'updatedAt': 1710601300000,
         },
         'workspace': {
@@ -365,15 +409,22 @@ class _FakeShellAgentApi extends AgentApi {
         'patchResultMessage': '',
         'runProfileId': 'test_all',
         'runLabel': '데모 점검',
-        'runCommand': 'git status --short',
-        'runStatus': '',
-        'runSummary': '패치 검토 뒤 실행 대기 중입니다.',
-        'runExcerpt': '',
-        'runOutput': '',
+        'runCommand': 'npm test -- --failed',
+        'runStatus': 'failed',
+        'runSummary': '인증 미들웨어 테스트가 아직 실패합니다.',
+        'runExcerpt': 'FAIL auth middleware\nexpected 200 but got 401',
+        'runOutput':
+            'FAIL auth middleware\nexpected 200 but got 401\nat middleware/auth_test.dart:27',
         'runChangedFiles': ['README.md'],
-        'runTopErrors': const [],
+        'runTopErrors': [
+          {
+            'path': 'middleware/auth_test.dart',
+            'line': 27,
+            'message': 'expected 200 but got 401',
+          },
+        ],
         'currentJobFiles': ['README.md', 'mobile/flutter_app/lib/app.dart'],
-        'lastError': '',
+        'lastError': 'expected 200 but got 401',
       },
     };
   }
