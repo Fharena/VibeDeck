@@ -1743,12 +1743,15 @@ function renderThreadPanelHtml(nonce: string): string {
   <div id="app"><div class="card flat"><div class="title">공유 세션을 불러오는 중...</div><div class="muted">잠시 후에도 바뀌지 않으면 VibeDeck: Show Bridge Status와 패널 오류 문구를 확인하세요.</div></div></div>
   <script nonce="${nonce}">
     const appRoot = document.getElementById("app");
+    function safeEsc(value) {
+      return String(value || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    }
     function renderFatalError(error) {
       if (!appRoot) {
         return;
       }
       const message = error instanceof Error ? (error.stack || error.message) : String(error || "알 수 없는 오류");
-      appRoot.innerHTML = '<div class="card flat"><div class="title">패널을 그리지 못했습니다.</div><div class="muted">아래 오류를 확인해 주세요.</div><pre>' + esc(message) + '</pre></div>';
+      appRoot.innerHTML = '<div class="card flat"><div class="title">패널을 그리지 못했습니다.</div><div class="muted">아래 오류를 확인해 주세요.</div><pre>' + safeEsc(message) + '</pre></div>';
     }
 
     window.addEventListener("error", function(event) {
@@ -1929,13 +1932,13 @@ function renderThreadPanelHtml(nonce: string): string {
     }
 
     function renderSidebarSummary() {
-      const title = state.composeMode ? '새 세션' : (state.currentThread?.title || '선택된 세션 없음');
-      const stateText = state.operation.phase || state.currentThread?.state || '-';
-      const activity = state.live.activity.summary || state.currentThread?.lastEventText || '아직 작업 기록이 없습니다.';
+      const title = state.composeMode ? '새 세션' : ((state.currentThread && state.currentThread.title) || '선택된 세션 없음');
+      const stateText = state.operation.phase || ((state.currentThread && state.currentThread.state) || '-');
+      const activity = state.live.activity.summary || ((state.currentThread && state.currentThread.lastEventText) || '아직 작업 기록이 없습니다.');
       return [
         '<div class="eyebrow">현재 세션</div>',
         '<div class="title small">' + esc(title) + '</div>',
-        '<div class="row"><span class="badge ' + badgeTone(stateText) + '">' + esc(stateText) + '</span><span class="muted">' + esc(fmt(state.currentThread?.updatedAt || state.refreshedAt, false)) + '</span></div>',
+        '<div class="row"><span class="badge ' + badgeTone(stateText) + '">' + esc(stateText) + '</span><span class="muted">' + esc(fmt((state.currentThread && state.currentThread.updatedAt) || state.refreshedAt, false)) + '</span></div>',
         '<div class="muted">' + esc(activity) + '</div>',
       ].join('');
     }
@@ -1986,8 +1989,8 @@ function renderThreadPanelHtml(nonce: string): string {
     }
 
     function renderSessionHeader() {
-      const title = state.composeMode ? '새 세션' : (state.currentThread?.title || '세션을 선택하세요');
-      const summary = state.live.activity.summary || state.currentThread?.lastEventText || '프롬프트를 보내 작업을 시작하세요.';
+      const title = state.composeMode ? '새 세션' : ((state.currentThread && state.currentThread.title) || '세션을 선택하세요');
+      const summary = state.live.activity.summary || ((state.currentThread && state.currentThread.lastEventText) || '프롬프트를 보내 작업을 시작하세요.');
       const activeFilePath = state.live.workspace.activeFilePath || state.live.focus.activeFilePath || '';
       const terminalStatus = state.live.terminal.status || state.derived.runStatus || '';
       const changedCount = state.live.workspace.changedFiles.length || state.derived.currentJobFiles.length || 0;
@@ -2000,7 +2003,7 @@ function renderThreadPanelHtml(nonce: string): string {
         '      <div class="session-title">' + esc(title) + '</div>',
         '      <div class="session-summary">' + esc(summary) + '</div>',
         '    </div>',
-        '    <span class="badge ' + badgeTone(state.operation.phase || state.currentThread?.state) + '">' + esc(state.operation.phase || state.currentThread?.state || '-') + '</span>',
+        '    <span class="badge ' + badgeTone(state.operation.phase || (state.currentThread && state.currentThread.state) || '-') + '">' + esc(state.operation.phase || ((state.currentThread && state.currentThread.state) || '-')) + '</span>',
         '  </div>',
         '  <div class="row">',
         '    <span class="pill ' + (state.adapter.ready ? 'ok' : 'bad') + '">브리지 ' + esc(state.adapter.name || '-') + '</span>',
@@ -2008,7 +2011,7 @@ function renderThreadPanelHtml(nonce: string): string {
         (terminalStatus ? '<span class="pill">실행 ' + esc(terminalStatus) + '</span>' : ''),
         (changedCount ? '<span class="pill">변경 ' + esc(String(changedCount)) + '</span>' : ''),
         (participants ? '<span class="pill">참여 ' + esc(String(participants)) + '</span>' : ''),
-        '    <span class="pill">업데이트 ' + esc(fmt(state.currentThread?.updatedAt || state.refreshedAt, false)) + '</span>',
+        '    <span class="pill">업데이트 ' + esc(fmt((state.currentThread && state.currentThread.updatedAt) || state.refreshedAt, false)) + '</span>',
         '  </div>',
         '</div>',
       ].join('');
