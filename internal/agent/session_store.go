@@ -470,6 +470,10 @@ func deriveSessionLiveState(detail ThreadDetail, operation SessionOperationState
 	if live.Workspace.ActiveFilePath == "" {
 		live.Workspace.ActiveFilePath = firstNonEmptyText(live.Focus.ActiveFilePath, firstString(live.Workspace.PatchFiles), firstString(live.Workspace.ChangedFiles))
 	}
+	if live.Focus.ActiveFilePath == "" && live.Workspace.ActiveFilePath != "" {
+		live.Focus.ActiveFilePath = live.Workspace.ActiveFilePath
+		live.Focus.UpdatedAt = firstNonZero(live.Focus.UpdatedAt, live.Workspace.UpdatedAt)
+	}
 	if len(live.Workspace.PatchFiles) == 0 && live.Focus.PatchPath != "" {
 		live.Workspace.PatchFiles = []string{live.Focus.PatchPath}
 	}
@@ -484,6 +488,9 @@ func deriveSessionReasoningState(detail ThreadDetail, operation SessionOperation
 	for i := len(detail.Events) - 1; i >= 0; i-- {
 		event := detail.Events[i]
 		if event.Role != "assistant" && event.Role != "system" {
+			continue
+		}
+		if event.Role == "system" && event.Kind == "tool_activity" && valueFromData(event.Data, "summary", "") == "" {
 			continue
 		}
 		summary := firstNonEmptyText(valueFromData(event.Data, "summary", ""), event.Body, event.Title)
@@ -544,6 +551,17 @@ func deriveSessionPlanState(detail ThreadDetail, operation SessionOperationState
 		}
 	}
 
+	contextPlan := deriveContextPlanState(detail.Events)
+	if len(contextPlan.Items) > 0 &&
+		patchAt == 0 &&
+		applyRequestedAt == 0 &&
+		applyAt == 0 &&
+		runRequestedAt == 0 &&
+		runAt == 0 {
+		contextPlan.UpdatedAt = firstNonZero(contextPlan.UpdatedAt, promptAt, detail.Thread.UpdatedAt)
+		return contextPlan
+	}
+
 	items := []SessionPlanItem{
 		{ID: "request", Label: "요청 접수", Status: statusFromPresence(promptAt > 0, false), Detail: "사용자 요청이 세션에 기록되었습니다.", UpdatedAt: promptAt},
 		{ID: "draft_patch", Label: "패치 초안 준비", Status: planStatus(patchAt > 0, promptAt > 0 && patchAt == 0, false), Detail: firstNonEmptyText(patchSummary, sessionPlanDetail("draft_patch", operation.Phase)), UpdatedAt: firstNonZero(patchAt, promptAt)},
@@ -595,6 +613,30 @@ func deriveSessionTerminalState(detail ThreadDetail, operation SessionOperationS
 			terminal.UpdatedAt = event.At
 		}
 	}
+	if terminal.UpdatedAt == 0 {
+		for i := len(detail.Events) - 1; i >= 0; i-- {
+			event := detail.Events[i]
+			if event.Kind != "tool_activity" {
+				continue
+			}
+			commands := sessionContextCommands(event.Data)
+			terminalFiles := sessionContextTerminalFiles(event.Data)
+			if len(commands) == 0 && len(terminalFiles) == 0 {
+				continue
+			}
+			excerpt := firstNonEmptyText(event.Body, strings.Join(firstNonEmptyStrings(commands, terminalFiles), " | "))
+			terminal = SessionTerminalState{
+				Status:    "context",
+				Label:     firstNonEmptyText(valueFromData(event.Data, "label", ""), "Cursor 터미널 맥락"),
+				Command:   firstString(commands),
+				Summary:   firstNonEmptyText(event.Body, "Cursor가 최근 터미널 맥락을 공유했습니다."),
+				Excerpt:   excerpt,
+				Output:    excerpt,
+				UpdatedAt: event.At,
+			}
+			break
+		}
+	}
 	return terminal
 }
 
@@ -635,6 +677,21 @@ func deriveSessionWorkspaceState(detail ThreadDetail, operation SessionOperation
 	}
 	if workspace.ActiveFilePath == "" {
 		workspace.ActiveFilePath = firstNonEmptyText(firstString(operation.PatchFiles), firstString(operation.RunChangedFiles), firstString(operation.CurrentJobFiles))
+	}
+	if workspace.ActiveFilePath == "" {
+		for i := len(detail.Events) - 1; i >= 0; i-- {
+			event := detail.Events[i]
+			if event.Kind != "tool_activity" {
+				continue
+			}
+			contextFiles := sessionContextFiles(event.Data)
+			if len(contextFiles) == 0 {
+				continue
+			}
+			workspace.ActiveFilePath = firstString(contextFiles)
+			workspace.UpdatedAt = firstNonZero(workspace.UpdatedAt, event.At)
+			break
+		}
 	}
 	if workspace.UpdatedAt == 0 {
 		workspace.UpdatedAt = detail.Thread.UpdatedAt
@@ -681,10 +738,209 @@ func sessionToolActivityFromEvent(event ThreadEvent) (SessionToolActivity, bool)
 			activity.Status = "completed"
 		}
 		activity.Detail = firstNonEmptyText(valueFromData(event.Data, "summary", ""), event.Body)
+	case "tool_activity":
+		activity.Label = firstNonEmptyText(sessionToolActivityLabel(event), "작업 맥락")
+		activity.Status = firstNonEmptyText(normalizeSessionStatus(valueFromData(event.Data, "status", "")), "completed")
+		activity.Detail = firstNonEmptyText(event.Body, sessionToolActivityDetail(event))
 	default:
 		return SessionToolActivity{}, false
 	}
 	return activity, true
+}
+
+func deriveContextPlanState(events []ThreadEvent) SessionPlanState {
+	for i := len(events) - 1; i >= 0; i-- {
+		event := events[i]
+		if event.Kind != "tool_activity" {
+			continue
+		}
+		items := sessionPlanItemsFromAny(event.Data["todos"], event.At)
+		if len(items) == 0 {
+			continue
+		}
+		return SessionPlanState{
+			Summary:   contextPlanSummary(items),
+			Items:     items,
+			UpdatedAt: event.At,
+		}
+	}
+	return SessionPlanState{}
+}
+
+func contextPlanSummary(items []SessionPlanItem) string {
+	for _, item := range items {
+		if item.Status == "failed" {
+			return item.Label + " 단계에서 확인이 필요합니다."
+		}
+	}
+	for _, item := range items {
+		if item.Status == "in_progress" {
+			return item.Label + " 진행 중입니다."
+		}
+	}
+	if len(items) > 0 {
+		return "Cursor 작업 계획을 공유하고 있습니다."
+	}
+	return ""
+}
+
+func sessionToolActivityLabel(event ThreadEvent) string {
+	if event.Kind != "tool_activity" {
+		return strings.TrimSpace(event.Title)
+	}
+	if len(sessionPlanItemsFromAny(event.Data["todos"], event.At)) > 0 {
+		return "작업 계획"
+	}
+	if len(sessionContextCommands(event.Data)) > 0 || len(sessionContextTerminalFiles(event.Data)) > 0 {
+		return "터미널 맥락"
+	}
+	if len(sessionContextFiles(event.Data)) > 0 {
+		return "파일 맥락"
+	}
+	return firstNonEmptyText(event.Title, valueFromData(event.Data, "label", ""), "작업 맥락")
+}
+
+func sessionToolActivityDetail(event ThreadEvent) string {
+	return firstNonEmptyText(
+		valueFromData(event.Data, "summary", ""),
+		event.Body,
+		firstString(firstNonEmptyStrings(sessionContextCommands(event.Data), sessionContextFiles(event.Data))),
+	)
+}
+
+func sessionPlanItemsFromAny(value any, fallbackAt int64) []SessionPlanItem {
+	typed, ok := value.([]any)
+	if !ok {
+		return nil
+	}
+
+	items := make([]SessionPlanItem, 0, len(typed))
+	for index, raw := range typed {
+		switch item := raw.(type) {
+		case string:
+			label := strings.TrimSpace(item)
+			if label == "" {
+				continue
+			}
+			items = append(items, SessionPlanItem{
+				ID:        label,
+				Label:     label,
+				Status:    "pending",
+				UpdatedAt: fallbackAt,
+			})
+		case map[string]any:
+			label := firstNonEmptyText(
+				stringValue(item["label"]),
+				stringValue(item["title"]),
+				stringValue(item["text"]),
+				stringValue(item["detail"]),
+			)
+			if label == "" {
+				continue
+			}
+			status := normalizeSessionStatus(stringValue(item["status"]))
+			if status == "" {
+				switch {
+				case boolValue(item["completed"]) || boolValue(item["done"]):
+					status = "completed"
+				case boolValue(item["active"]) || boolValue(item["current"]) || boolValue(item["inProgress"]):
+					status = "in_progress"
+				default:
+					status = "pending"
+				}
+			}
+			items = append(items, SessionPlanItem{
+				ID:        firstNonEmptyText(stringValue(item["id"]), label),
+				Label:     label,
+				Status:    status,
+				Detail:    firstNonEmptyText(stringValue(item["detail"]), stringValue(item["description"]), stringValue(item["text"])),
+				UpdatedAt: firstNonZero(int64(intValue(item["updatedAt"])), fallbackAt, int64(index+1)),
+			})
+		}
+	}
+	return items
+}
+
+func normalizeSessionStatus(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "completed", "complete", "done", "success":
+		return "completed"
+	case "in_progress", "in-progress", "running", "active", "doing":
+		return "in_progress"
+	case "failed", "error", "blocked":
+		if strings.EqualFold(strings.TrimSpace(value), "blocked") {
+			return "blocked"
+		}
+		return "failed"
+	case "pending", "todo", "queued":
+		return "pending"
+	default:
+		return strings.TrimSpace(value)
+	}
+}
+
+func boolValue(value any) bool {
+	typed, ok := value.(bool)
+	return ok && typed
+}
+
+func sessionContextFiles(data map[string]any) []string {
+	return stringsFromMapFields(
+		data,
+		"files",
+		"filePaths",
+		"selectedFiles",
+		"selectedFilePaths",
+		"attachedFiles",
+		"mentionedFiles",
+		"folderSelections",
+	)
+}
+
+func sessionContextCommands(data map[string]any) []string {
+	return stringsFromMapFields(data, "terminalCommands", "commands", "command")
+}
+
+func sessionContextTerminalFiles(data map[string]any) []string {
+	return stringsFromMapFields(data, "terminalFiles")
+}
+
+func stringsFromMapFields(data map[string]any, fields ...string) []string {
+	if data == nil {
+		return nil
+	}
+	out := make([]string, 0, len(fields))
+	for _, field := range fields {
+		out = append(out, flattenUnknownStrings(data[field])...)
+	}
+	return dedupeStrings(out)
+}
+
+func flattenUnknownStrings(value any) []string {
+	switch typed := value.(type) {
+	case string:
+		text := strings.TrimSpace(typed)
+		if text == "" {
+			return nil
+		}
+		return []string{text}
+	case []string:
+		return cloneStrings(typed)
+	case []any:
+		out := make([]string, 0, len(typed))
+		for _, item := range typed {
+			out = append(out, flattenUnknownStrings(item)...)
+		}
+		return dedupeStrings(out)
+	case map[string]any:
+		out := make([]string, 0, 6)
+		for _, key := range []string{"path", "filePath", "command", "label", "text", "title", "value"} {
+			out = append(out, flattenUnknownStrings(typed[key])...)
+		}
+		return dedupeStrings(out)
+	default:
+		return nil
+	}
 }
 
 func sessionPhaseLabel(phase string) string {
@@ -722,6 +978,10 @@ func sessionEventLabel(kind string) string {
 		return "실행 요청"
 	case "run_finished":
 		return "실행 결과"
+	case "provider_message":
+		return "Cursor 메시지"
+	case "tool_activity":
+		return "Cursor 요청 맥락"
 	default:
 		return "세션 이벤트"
 	}
