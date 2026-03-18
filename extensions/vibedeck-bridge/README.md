@@ -79,6 +79,7 @@ npm run smoke:panel
 - `VibeDeck: Copy Mobile Bootstrap Link`: `vibedeck://bootstrap?agent=...&signaling=...&thread=...` 링크를 클립보드에 복사합니다.
 - `vibedeckBridge.mobileBootstrap.hostOverride`: QR/deep link에 넣을 host를 강제로 지정합니다. 비우면 private IPv4를 자동 선택합니다.
 - `vibedeckBridge.mobileBootstrap.scheme`: 기본값 `vibedeck`
+- 실기기 연결까지 하려면 `vibedeckBridge.agent.host`를 `0.0.0.0`으로 두고 `VibeDeck: Restart Local Agent`를 실행해야 합니다. `signaling` 서버는 별도로 띄워야 합니다.
 
 모바일 bootstrap smoke:
 

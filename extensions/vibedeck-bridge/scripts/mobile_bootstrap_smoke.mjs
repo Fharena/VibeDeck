@@ -8,6 +8,7 @@ import {
 
 const clipboard = { value: "" };
 const postedMessages = [];
+let ensureAgentReadyCount = 0;
 
 const panel = {
   title: "",
@@ -102,6 +103,9 @@ const controller = createMobileBootstrapController(
     resolveLanHost() {
       return "192.168.0.24";
     },
+    async ensureAgentReady() {
+      ensureAgentReadyCount += 1;
+    },
     async renderQRCodeSvg(value) {
       return `<svg data-value="${value}"></svg>`;
     },
@@ -120,6 +124,8 @@ assert.equal(postedMessages.at(-1)?.type, "state");
 assert.equal(postedMessages.at(-1)?.state.publicAgentBaseUrl, "http://192.168.0.24:8080");
 assert.equal(postedMessages.at(-1)?.state.currentThreadId, "thread-qr-1");
 assert.match(postedMessages.at(-1)?.state.qrSvg, /svg/);
+assert.match(postedMessages.at(-1)?.state.warning, /0\.0\.0\.0/);
+assert.equal(ensureAgentReadyCount, 2);
 
 assert.equal(
   buildMobileBootstrapLink({
@@ -136,4 +142,3 @@ assert.equal(
 );
 
 console.log("mobile bootstrap smoke ok");
-

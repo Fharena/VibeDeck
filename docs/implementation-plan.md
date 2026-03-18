@@ -240,6 +240,10 @@
   - `Open Shared Threads`를 에디터 탭 fallback이 아닌 사이드바 webview view를 우선 여는 구조로 바꿈
   - 실제 session live state가 일부 비어 있어도 렌더가 죽지 않도록 live/operation state를 기본값으로 정규화
   - 검증: `npm --prefix extensions/vibedeck-bridge run build` 통과, `npm --prefix extensions/vibedeck-bridge run smoke:panel` 통과
+- 2026-03-18 / 모바일 bootstrap local agent 자동 복구와 실기기 안내 보강
+  - `Open Mobile Bootstrap` 진입 시 local agent가 꺼져 있으면 먼저 자동으로 시작을 시도하도록 보강
+  - 부트스트랩 패널과 오류 메시지에 `vibedeckBridge.agent.host=0.0.0.0`, `VibeDeck: Restart Local Agent`, `signaling` 별도 실행 필요를 한국어로 명시
+  - 검증: `npm --prefix extensions/vibedeck-bridge run build` 통과, `npm --prefix extensions/vibedeck-bridge run smoke:mobile-bootstrap` 통과
 
 ## 다음 작업 우선순위
 

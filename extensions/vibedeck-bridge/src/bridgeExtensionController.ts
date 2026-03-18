@@ -244,7 +244,11 @@ class DefaultBridgeExtensionController implements BridgeExtensionController {
         },
       });
     this.threadPanel = createThreadPanelController(this.vscode);
-    this.mobileBootstrap = createMobileBootstrapController(this.vscode);
+    this.mobileBootstrap = createMobileBootstrapController(this.vscode, {
+      ensureAgentReady: async () => {
+        await this.ensureAgentReadyForBootstrap();
+      },
+    });
     this.cursorChatLinks = createCursorChatLinkTracker();
     this.cursorChatTimelineMirror = createCursorChatTimelineMirror({
       tracker: this.cursorChatLinks,
@@ -517,6 +521,23 @@ class DefaultBridgeExtensionController implements BridgeExtensionController {
     if (showMessage) {
       this.showAgentStatusMessage(status);
     }
+  }
+
+  private async ensureAgentReadyForBootstrap(): Promise<void> {
+    if (!this.activeBridge) {
+      await this.startServer(false);
+    }
+    if (!this.activeBridge) {
+      return;
+    }
+
+    const status = this.localAgent.status();
+    if (status.state === "running" || status.state === "starting") {
+      return;
+    }
+
+    await this.localAgent.start(this.readSettings().agent, this.activeBridge.address);
+    this.updateStatusBar();
   }
 
   private showAgentStatusMessage(status: LocalAgentStatus): void {
