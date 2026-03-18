@@ -258,9 +258,11 @@ class AgentApi {
   }
 
   Map<String, dynamic> _normalizeSessionsResponse(Map<String, dynamic> body) {
+    final sessionList = _cloneObjectList(body['sessions']);
+    final fallbackThreads = _cloneObjectList(body['threads']);
     return {
       ...body,
-      'threads': _cloneObjectList(body['sessions'])
+      'threads': (sessionList.isNotEmpty ? sessionList : fallbackThreads)
           .map(_normalizeSessionSummary)
           .toList(),
     };
@@ -285,7 +287,10 @@ class AgentApi {
     return {
       'id': threadId.isNotEmpty ? threadId : sessionId,
       'threadId': threadId,
-      'sessionId': controlSessionId.isNotEmpty ? controlSessionId : sessionId,
+      'sessionId': sessionId.isNotEmpty
+          ? sessionId
+          : (threadId.isNotEmpty ? threadId : controlSessionId),
+      'controlSessionId': controlSessionId,
       'title': _text(session['title']),
       'state': _text(session['phase']),
       'currentJobId': _text(session['currentJobId']),
