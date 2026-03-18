@@ -131,6 +131,81 @@ func TestSessionStoreBuildsReadModelFromThreadDetail(t *testing.T) {
 	}
 }
 
+func TestSessionStoreDerivesCursorContextIntoSharedLiveState(t *testing.T) {
+	threadStore := NewThreadStore()
+	threadStore.EnsureThread("thread-cursor-context", "sid-cursor-context", "Cursor regular chat")
+
+	_, _ = threadStore.AppendEvent("thread-cursor-context", ThreadEvent{
+		Kind: "prompt_submitted",
+		Role: "user",
+		Body: "삼성전자 동향을 정리해줘",
+		At:   1700000000100,
+	})
+	_, _ = threadStore.AppendEvent("thread-cursor-context", ThreadEvent{
+		Kind:  "provider_message",
+		Role:  "assistant",
+		Title: "Cursor 응답",
+		Body:  "먼저 최근 삼성전자 동향을 정리하고 필요한 파일을 준비하겠습니다.",
+		Data: map[string]any{
+			"source": "cursor_storage",
+		},
+		At: 1700000000200,
+	})
+	_, _ = threadStore.AppendEvent("thread-cursor-context", ThreadEvent{
+		Kind:  "tool_activity",
+		Role:  "system",
+		Title: "Cursor 요청 맥락",
+		Body:  "files: reports/demo.md | terminal: rg 삼성전자, npm test | todos: 2",
+		Data: map[string]any{
+			"source":           "cursor_storage",
+			"files":            []string{"reports/demo.md", "README.md"},
+			"terminalCommands": []string{"rg 삼성전자", "npm test"},
+			"todos": []any{
+				map[string]any{
+					"id":        "collect-data",
+					"title":     "시장 데이터 확인",
+					"status":    "in_progress",
+					"detail":    "최근 기사와 수급 데이터를 확인합니다.",
+					"updatedAt": 1700000000300,
+				},
+				map[string]any{
+					"id":          "write-report",
+					"title":       "보고서 초안 작성",
+					"description": "reports/demo.md 초안을 정리합니다.",
+					"completed":   false,
+				},
+			},
+		},
+		At: 1700000000300,
+	})
+
+	store := NewSessionStore(threadStore, AdapterRuntimeInfo{
+		Name:          "cursor-bridge",
+		Mode:          "cursor_bridge",
+		WorkspaceRoot: `C:\repo\workspace`,
+	})
+
+	detail, ok := store.Get("thread-cursor-context")
+	if !ok {
+		t.Fatalf("expected session detail to exist")
+	}
+	if detail.LiveState.Reasoning.Summary != "먼저 최근 삼성전자 동향을 정리하고 필요한 파일을 준비하겠습니다." || detail.LiveState.Reasoning.SourceKind != "provider_message" {
+		t.Fatalf("expected assistant provider message to drive reasoning, got %+v", detail.LiveState.Reasoning)
+	}
+	if len(detail.LiveState.Plan.Items) != 2 || detail.LiveState.Plan.Items[0].Label != "시장 데이터 확인" || detail.LiveState.Plan.Items[0].Status != "in_progress" {
+		t.Fatalf("expected Cursor todos to drive shared plan, got %+v", detail.LiveState.Plan)
+	}
+	if detail.LiveState.Tools.CurrentLabel != "작업 계획" || len(detail.LiveState.Tools.Activities) != 2 {
+		t.Fatalf("expected tool activity to include Cursor context, got %+v", detail.LiveState.Tools)
+	}
+	if detail.LiveState.Terminal.Status != "context" || detail.LiveState.Terminal.Command != "rg 삼성전자" {
+		t.Fatalf("expected Cursor terminal context to populate terminal state, got %+v", detail.LiveState.Terminal)
+	}
+	if detail.LiveState.Workspace.ActiveFilePath != "reports/demo.md" || detail.LiveState.Focus.ActiveFilePath != "reports/demo.md" {
+		t.Fatalf("expected Cursor file context to populate workspace/focus, got %+v / %+v", detail.LiveState.Workspace, detail.LiveState.Focus)
+	}
+}
+
 func TestSessionStoreMergesLiveOverrides(t *testing.T) {
 	threadStore := NewThreadStore()
 	threadStore.EnsureThread("thread-override", "sid-2", "Override test")

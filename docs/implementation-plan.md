@@ -205,11 +205,15 @@
   - 세션 목록에 검색과 현재 세션 요약을 추가하고, 메인 화면은 thread viewer보다 shared session workspace surface에 가깝게 정리
   - prompt context 옵션은 접어두고, reasoning/plan/tools/workspace/terminal 상태를 작업 중심으로 노출
   - 검증: `npm --prefix extensions/vibedeck-bridge run build`, `npm --prefix extensions/vibedeck-bridge run smoke:panel` 통과
+- 2026-03-18 / shared session live state 스키마 보강
+  - Cursor storage에서 들어온 `provider_message`, `tool_activity`를 shared session의 판단/계획/도구/터미널/작업공간 파생 로직에 반영
+  - Cursor assistant 응답은 reasoning으로, context의 `todos`는 plan으로, terminal/files 맥락은 terminal/workspace surface로 우선 분리
+  - generic context 이벤트가 assistant reasoning을 덮어쓰지 않도록 우선순위를 정리하고 focus도 workspace active file을 따라가게 보정
+  - 검증: `go test ./internal/agent -run TestSessionStore`, `go test ./internal/agent -run 'TestHTTPServerSession(LiveUpdateEndpoint|TimelineAppendEndpoint)'` 통과
 
 ## 다음 작업 우선순위
 
 1. 세션 UX 기반 정리
-   - 판단 요약 / 계획 흐름 / 도구 활동 스키마를 live sync 품질 기준으로 정교화
    - inline review 이후 상세 diff 선택/적용 UX를 더 줄이고 메인 피드와 연결 강화
    - 터미널 live state 및 이벤트 스키마를 IDE/mobile 양쪽에서 동일하게 다듬기
 2. Cursor 패널 재구성
