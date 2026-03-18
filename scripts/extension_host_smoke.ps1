@@ -162,6 +162,106 @@ function Invoke-AgentJson {
     return Invoke-RestMethod -Method $Method -Uri $Uri
 }
 
+function Invoke-GoBuild {
+    param(
+        [Parameter(Mandatory = $true)][string]$GoCommandPath,
+        [Parameter(Mandatory = $true)][string]$RepoRoot,
+        [Parameter(Mandatory = $true)][string]$OutputPath,
+        [Parameter(Mandatory = $true)][string]$GoCacheDir,
+        [Parameter(Mandatory = $true)][string]$GoTmpDir
+    )
+
+    $previousGoCache = [Environment]::GetEnvironmentVariable("GOCACHE", "Process")
+    $previousGoTmpDir = [Environment]::GetEnvironmentVariable("GOTMPDIR", "Process")
+    try {
+        [Environment]::SetEnvironmentVariable("GOCACHE", $GoCacheDir, "Process")
+        [Environment]::SetEnvironmentVariable("GOTMPDIR", $GoTmpDir, "Process")
+        Push-Location $RepoRoot
+        try {
+            & $GoCommandPath build "-buildvcs=false" "-o" $OutputPath "./cmd/agent"
+            if ($LASTEXITCODE -ne 0) {
+                throw "agent binary build failed: exit $LASTEXITCODE"
+            }
+        } finally {
+            Pop-Location
+        }
+    } finally {
+        [Environment]::SetEnvironmentVariable("GOCACHE", $previousGoCache, "Process")
+        [Environment]::SetEnvironmentVariable("GOTMPDIR", $previousGoTmpDir, "Process")
+    }
+}
+
+function Start-AgentBinaryProcess {
+    param(
+        [Parameter(Mandatory = $true)][string]$BinaryPath,
+        [Parameter(Mandatory = $true)][string]$WorkingDirectory,
+        [Parameter(Mandatory = $true)][string]$ListenAddress,
+        [Parameter(Mandatory = $true)][string]$BridgeAddress,
+        [Parameter(Mandatory = $true)][string]$StdoutLog,
+        [Parameter(Mandatory = $true)][string]$StderrLog,
+        [string]$RunProfileFile = ""
+    )
+
+    $stdoutWriter = [System.IO.StreamWriter]::new($StdoutLog, $false, [System.Text.UTF8Encoding]::new($false))
+    $stderrWriter = [System.IO.StreamWriter]::new($StderrLog, $false, [System.Text.UTF8Encoding]::new($false))
+    $stdoutWriter.AutoFlush = $true
+    $stderrWriter.AutoFlush = $true
+
+    $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = $BinaryPath
+    $startInfo.WorkingDirectory = $WorkingDirectory
+    $startInfo.UseShellExecute = $false
+    $startInfo.CreateNoWindow = $true
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    $startInfo.Environment["AGENT_ADDR"] = $ListenAddress
+    $startInfo.Environment["CURSOR_BRIDGE_TCP_ADDR"] = $BridgeAddress
+    if (-not [string]::IsNullOrWhiteSpace($RunProfileFile)) {
+        $startInfo.Environment["RUN_PROFILE_FILE"] = $RunProfileFile
+    }
+
+    $process = [System.Diagnostics.Process]::new()
+    $process.StartInfo = $startInfo
+
+    $stdoutHandler = [System.Diagnostics.DataReceivedEventHandler]{
+        param($sender, $eventArgs)
+        if ($null -ne $eventArgs.Data) {
+            $stdoutWriter.WriteLine($eventArgs.Data)
+        }
+    }
+    $stderrHandler = [System.Diagnostics.DataReceivedEventHandler]{
+        param($sender, $eventArgs)
+        if ($null -ne $eventArgs.Data) {
+            $stderrWriter.WriteLine($eventArgs.Data)
+        }
+    }
+
+    $process.add_OutputDataReceived($stdoutHandler)
+    $process.add_ErrorDataReceived($stderrHandler)
+
+    try {
+        if (-not $process.Start()) {
+            throw "agent process start failed"
+        }
+        $process.BeginOutputReadLine()
+        $process.BeginErrorReadLine()
+        return [PSCustomObject]@{
+            Process = $process
+            StdoutWriter = $stdoutWriter
+            StderrWriter = $stderrWriter
+            StdoutHandler = $stdoutHandler
+            StderrHandler = $stderrHandler
+        }
+    } catch {
+        $process.remove_OutputDataReceived($stdoutHandler)
+        $process.remove_ErrorDataReceived($stderrHandler)
+        $process.Dispose()
+        $stdoutWriter.Dispose()
+        $stderrWriter.Dispose()
+        throw
+    }
+}
+
 function New-Envelope {
     param(
         [Parameter(Mandatory = $true)][string]$Sid,
@@ -202,31 +302,21 @@ $logsDir = Join-Path $tempRoot "logs"
 [System.IO.Directory]::CreateDirectory($logsDir) | Out-Null
 $stdoutLog = Join-Path $logsDir "agent.stdout.log"
 $stderrLog = Join-Path $logsDir "agent.stderr.log"
-$agentScriptPath = Join-Path $tempRoot "run-agent.cmd"
+$agentBinaryDir = Join-Path $tempRoot "agent-bin"
+$agentBinaryPath = Join-Path $agentBinaryDir "agent.exe"
 $goCacheDir = Join-Path $tempRoot "go-cache"
 $goTmpDir = Join-Path $tempRoot "go-tmp"
+[System.IO.Directory]::CreateDirectory($agentBinaryDir) | Out-Null
 [System.IO.Directory]::CreateDirectory($goCacheDir) | Out-Null
 [System.IO.Directory]::CreateDirectory($goTmpDir) | Out-Null
 $listenAddress = $AgentBaseUrl -replace "^https?://", ""
 
-$scriptContent = @(
-    "@echo off",
-    ("set AGENT_ADDR={0}" -f $listenAddress),
-    ("set GOCACHE={0}" -f $goCacheDir),
-    ("set GOTMPDIR={0}" -f $goTmpDir),
-    ("set CURSOR_BRIDGE_TCP_ADDR={0}" -f $BridgeAddress)
-) -join "`r`n"
-if (-not [string]::IsNullOrWhiteSpace($RunProfileFile)) {
-    $scriptContent += "`r`n" + ('set RUN_PROFILE_FILE={0}' -f $RunProfileFile)
-}
-$scriptContent += "`r`n" + ('"{0}" run ./cmd/agent 1>"{1}" 2>"{2}"' -f $goCommand.Source, $stdoutLog, $stderrLog)
-[System.IO.File]::WriteAllText($agentScriptPath, $scriptContent + "`r`n", [System.Text.UTF8Encoding]::new($false))
-
-$agentProcess = $null
+$agentRuntime = $null
 $smokeSucceeded = $false
 try {
-    $agentProcess = Start-Process -FilePath $agentScriptPath -WorkingDirectory $repoRootResolved -PassThru -WindowStyle Hidden
-    $null = Wait-AgentReady -HealthUrl ($AgentBaseUrl.TrimEnd("/") + "/healthz") -Process $agentProcess -TimeoutSec $StartupTimeoutSec -StdErrLog $stderrLog
+    Invoke-GoBuild -GoCommandPath $goCommand.Source -RepoRoot $repoRootResolved -OutputPath $agentBinaryPath -GoCacheDir $goCacheDir -GoTmpDir $goTmpDir
+    $agentRuntime = Start-AgentBinaryProcess -BinaryPath $agentBinaryPath -WorkingDirectory $repoRootResolved -ListenAddress $listenAddress -BridgeAddress $BridgeAddress -StdoutLog $stdoutLog -StderrLog $stderrLog -RunProfileFile $RunProfileFile
+    $null = Wait-AgentReady -HealthUrl ($AgentBaseUrl.TrimEnd("/") + "/healthz") -Process $agentRuntime.Process -TimeoutSec $StartupTimeoutSec -StdErrLog $stderrLog
 
     $adapter = Invoke-AgentJson -Method GET -Uri ($AgentBaseUrl.TrimEnd("/") + "/v1/agent/runtime/adapter")
     if ($adapter.name -ne "cursor-extension-bridge") {
@@ -316,16 +406,38 @@ try {
         tempRoot = $tempRoot
     }
 } finally {
-    if ($agentProcess -and -not $agentProcess.HasExited) {
-        Stop-Process -Id $agentProcess.Id -Force
-        $agentProcess.WaitForExit()
+    if ($agentRuntime -and $agentRuntime.Process -and -not $agentRuntime.Process.HasExited) {
+        $agentRuntime.Process.Kill()
+        $agentRuntime.Process.WaitForExit()
     }
-    if ($agentProcess) {
+    if ($agentRuntime) {
         try {
-            $agentProcess.Dispose()
+            $agentRuntime.Process.CancelOutputRead()
         } catch {
         }
-        $agentProcess = $null
+        try {
+            $agentRuntime.Process.CancelErrorRead()
+        } catch {
+        }
+        Start-Sleep -Milliseconds 250
+        try {
+            $agentRuntime.Process.remove_OutputDataReceived($agentRuntime.StdoutHandler)
+            $agentRuntime.Process.remove_ErrorDataReceived($agentRuntime.StderrHandler)
+        } catch {
+        }
+        try {
+            $agentRuntime.Process.Dispose()
+        } catch {
+        }
+        try {
+            $agentRuntime.StdoutWriter.Dispose()
+        } catch {
+        }
+        try {
+            $agentRuntime.StderrWriter.Dispose()
+        } catch {
+        }
+        $agentRuntime = $null
         Start-Sleep -Milliseconds 1000
     }
     if ($smokeSucceeded) {

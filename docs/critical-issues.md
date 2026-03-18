@@ -261,11 +261,13 @@
 
 - 증상: `scripts/extension_host_smoke.ps1`가 기능 smoke는 통과하지만 cleanup 단계에서 `Access to the path ''agent.exe'' is denied.` 경고를 남기고 temp root를 지우지 못함
 - 영향: smoke 결과 자체는 확인되지만, 종료 직후 temp 산출물이 남고 스크립트 종료 코드가 불안정해질 수 있음
+- 2026-03-18 업데이트:
+  - `extension_host_smoke.ps1`가 `go run` 대신 임시 `agent.exe`를 먼저 빌드하고, wrapper `cmd` 없이 프로세스를 직접 실행하도록 변경
+  - stdout/stderr도 agent 프로세스에 직접 연결해 종료 후 handle 해제와 cleanup retry가 더 안정적으로 동작하게 정리
 - 즉시 대응:
-  - cleanup retry/backoff를 늘리고 Go cache/temp를 스크립트 자체 temp root로 고정
-  - 필요하면 `-KeepTempRoot`로 산출물을 남기고 수동 정리
+  - 최신 스크립트 기준으로 다시 실행해 재현 여부를 먼저 확인
+  - 여전히 temp root가 남으면 `-KeepTempRoot`로 산출물을 남기고 수동 정리
 - 영구 대응:
-  - `go run` 대신 사전 빌드된 agent binary를 재사용해 Windows 파일 잠금 영향을 줄이는 경로 검토
   - cleanup 전 child process tree와 handle 해제 시점을 더 정확히 추적
 - 학습 포인트:
   - Windows smoke 스크립트는 기능 경로 검증과 별개로 프로세스/파일 잠금 해제 타이밍까지 고려해야 안정적으로 종료된다

@@ -21,7 +21,15 @@ doctor가 확인하는 항목:
 
 ## 2. 가장 빠른 smoke
 
-실제 AI 연결 전, 저장소 fixture 경로로 최소 smoke를 확인합니다.
+가장 빠른 시작 경로는 extension 자동 부트스트랩 smoke입니다.
+
+```powershell
+npm --prefix .\extensions\vibedeck-bridge run smoke:bootstrap
+```
+
+이 경로는 local agent lifecycle과 panel agent URL 연결이 정상인지 먼저 확인합니다.
+
+저수준 fixture agent를 직접 띄워 보고 싶으면 아래를 사용합니다.
 
 ```powershell
 npm --prefix .\adapters\cursor-bridge install
@@ -31,7 +39,7 @@ go run ./cmd/relay
 go run ./cmd/agent
 ```
 
-이 경로는 `fixtureBridgeMain.js`를 사용하므로 실제 Cursor 파일 수정 대신 흐름만 검증합니다.
+이 수동 경로는 `fixtureBridgeMain.js`를 사용하므로 실제 Cursor 파일 수정 대신 흐름만 검증합니다.
 
 ## 3. 실제 cursor-agent smoke
 
@@ -134,5 +142,5 @@ cd .\mobile\flutter_app
 
 ## 7. 현재 남은 운영 이슈
 
-- Windows smoke 종료 직후 `agent.exe` 잠금으로 temp cleanup warning이 남을 수 있음
+- Windows mock smoke는 임시 agent binary 직접 실행으로 정리했지만, 환경에 따라 temp root가 남으면 `-KeepTempRoot`로 원인을 확인해야 할 수 있음
 - control timeout budget은 현재 코드 기본값으로 고정되어 있어 운영 설정 외부화가 남아 있음

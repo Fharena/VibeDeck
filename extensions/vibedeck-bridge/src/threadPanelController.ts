@@ -1588,7 +1588,7 @@ function renderThreadPanelHtml(nonce: string): string {
         items.push('<section class="card"><div class="title">상태</div><div class="muted">' + esc(state.statusMessage) + '</div></section>');
       }
       if (!state.adapter.ready && !state.errorMessage) {
-        items.push('<section class="card"><div class="title">연결 준비</div><div class="muted">agent가 아직 응답하지 않으면 ' + esc(state.agentBaseUrl) + ' 주소와 go run ./cmd/agent 실행 상태를 확인하세요.</div></section>');
+        items.push('<section class="card"><div class="title">연결 준비</div><div class="muted">agent가 아직 응답하지 않으면 ' + esc(state.agentBaseUrl) + ' 주소와 vibedeck_doctor.ps1 결과를 먼저 확인하세요.</div></section>');
       }
       return items.join('');
     }

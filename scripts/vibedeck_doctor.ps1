@@ -204,13 +204,13 @@ $extensionDistOk = Add-FileCheck -Results $results -Category "extension-dist" -P
 $vsceCmd = Join-Path $repoRootResolved "extensions\vibedeck-bridge\node_modules\.bin\vsce.cmd"
 $vsceOk = Add-FileCheck -Results $results -Category "vsce" -Path $vsceCmd -Hint "cd .\extensions\vibedeck-bridge ; npm install"
 
-$fixtureReady = ($gitPath -and $goPath -and $nodePath -and $npmPath -and $adapterDistOk)
+$bootstrapReady = ($nodePath -and $npmPath -and $extensionDistOk)
 $realSmokeReady = ($gitPath -and $goPath -and ($cursorAgentNative -or ($wslCursorAgent -and $wslCursorAgent.resolved)))
 $guiSmokeReady = ($realSmokeReady -and $extensionDistOk -and ($cursorCli -or $codeCli))
 $vsixReady = ($extensionDistOk -and $vsceOk)
 
 $profiles = @(
-    [PSCustomObject]@{ profile = "기본 fixture smoke"; ready = $fixtureReady; command = "go run ./cmd/agent" },
+    [PSCustomObject]@{ profile = "기본 bootstrap smoke"; ready = $bootstrapReady; command = "npm --prefix .\\extensions\\vibedeck-bridge run smoke:bootstrap" },
     [PSCustomObject]@{ profile = "실제 cursor-agent smoke"; ready = $realSmokeReady; command = "powershell -ExecutionPolicy Bypass -File .\scripts\cursor_agent_smoke.ps1" },
     [PSCustomObject]@{ profile = "GUI extension smoke"; ready = $guiSmokeReady; command = "powershell -ExecutionPolicy Bypass -File .\scripts\gui_extension_host_smoke.ps1 -Editor cursor -UseWslCursorAgent true -CursorAgentBin /home/<user>/.local/bin/cursor-agent -CursorAgentWslDistro Ubuntu" },
     [PSCustomObject]@{ profile = "VSIX 패키징"; ready = $vsixReady; command = "powershell -ExecutionPolicy Bypass -File .\scripts\package_vibedeck_bridge.ps1" }
