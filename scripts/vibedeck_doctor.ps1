@@ -81,10 +81,10 @@ function Get-WslCursorAgentInfo {
 
     foreach ($distro in $distros) {
         try {
-            $bin = & $wsl -d $distro -- bash -lc 'if command -v cursor-agent >/dev/null 2>&1; then command -v cursor-agent; elif command -v agent >/dev/null 2>&1; then command -v agent; fi' 2>$null
+            $bin = & $wsl -d $distro -- bash -lc 'HOME_PATH="${HOME:-$(getent passwd "$(id -u)" | cut -d: -f6)}"; for candidate in "$HOME_PATH/.local/bin/cursor-agent" "$HOME_PATH/.local/bin/agent"; do if [ -x "$candidate" ]; then printf "%s" "$candidate"; exit 0; fi; done; if command -v cursor-agent >/dev/null 2>&1; then command -v cursor-agent; elif command -v agent >/dev/null 2>&1; then command -v agent; fi' 2>$null
             $resolvedBin = Normalize-CommandText (($bin | Out-String))
             if (-not [string]::IsNullOrWhiteSpace($resolvedBin)) {
-                $version = & $wsl -d $distro -- bash -lc "PATH=\"\$HOME/.local/bin:\$PATH\"; $resolvedBin --version" 2>$null
+                $version = & $wsl -d $distro -- bash -lc "PATH=\"\$HOME/.local/bin:\$PATH\"; \"$resolvedBin\" --version" 2>$null
                 $resolvedVersion = Normalize-CommandText (($version | Out-String))
                 return [PSCustomObject]@{
                     available = $true

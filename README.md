@@ -201,6 +201,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\cursor_agent_smoke.ps1
 - 실제 변경이 temp repo 파일에 반영됐는지 확인
 
 현재 스크립트는 네이티브 `cursor-agent`가 없어도 WSL 안의 `cursor-agent`/`agent`를 자동 탐지합니다. 이 PC에서는 `cursor-agent login` 완료 후 실제 `PROMPT_SUBMIT -> PATCH_APPLY -> RUN_PROFILE` smoke가 통과했습니다. headless 실행 안정성을 위해 agent는 `--print`, `--output-format json`, `--trust`, `--model auto`를 기본 주입하고, HTTP/P2P control 경로는 message type별 timeout(`PROMPT_SUBMIT`/`RUN_PROFILE`: 5분, `PATCH_APPLY`: 30초)을 사용합니다.
+
+`cursor_agent_smoke.ps1`가 `resource_exhausted`로 실패하면 설치 문제보다는 Cursor 계정의 사용량 한도, 결제 상태, 동시 실행 제한을 먼저 확인하는 편이 빠릅니다.
 shared thread history는 기본적으로 디스크에 영속화됩니다.
 
 - 기본 경로: `%APPDATA%\VibeDeck\thread-store.json`
