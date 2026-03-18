@@ -374,8 +374,8 @@ try {
   await tick();
 
   assert.match(fakePanel.webview.html, /VibeDeck 세션/);
-  assert.match(fakePanel.webview.html, /세션 피드/);
-  assert.match(fakePanel.webview.html, /작업공간/);
+  assert.match(fakePanel.webview.html, /대화/);
+  assert.match(fakePanel.webview.html, /파일과 포커스/);
   assert.ok(panelMessages.length > 0, "panel should receive initial state");
 
   await panelMessageHandler({

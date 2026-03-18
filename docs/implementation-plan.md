@@ -231,6 +231,11 @@
   - `scripts/extension_host_smoke.ps1`를 `go run` wrapper 대신 임시 agent binary 직접 빌드 + 직접 실행 경로로 전환해 Windows cleanup 안정성을 높임
   - `vibedeck_doctor.ps1`, README, onboarding, 패널 안내 문구를 bootstrap smoke / doctor 중심 흐름으로 정리
   - 검증: `powershell -ExecutionPolicy Bypass -File .\scripts\vibedeck_doctor.ps1` 통과, `npm --prefix extensions/vibedeck-bridge run smoke:bootstrap` 통과, `npm --prefix extensions/vibedeck-bridge run smoke:panel` 통과
+- 2026-03-18 / Cursor 스타일 채팅 패널 리프레시
+  - `extensions/vibedeck-bridge` 패널을 카드 대시보드형에서 `세션 사이드바 + 중앙 대화 + 우측 보조 레일` 구조로 재배치
+  - 대화 타임라인을 말풍선형 메시지 피드로 바꾸고, composer를 하단 작업창처럼 정리
+  - `검토`, `실행`, `파일과 포커스`는 우측 레일로 눌러 메인 채팅 흐름 오염을 줄임
+  - 검증: `npm --prefix extensions/vibedeck-bridge run build` 통과, `npm --prefix extensions/vibedeck-bridge run smoke:panel` 통과
 
 ## 다음 작업 우선순위
 
