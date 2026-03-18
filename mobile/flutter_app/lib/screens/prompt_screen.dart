@@ -98,6 +98,7 @@ class _PromptScreenState extends State<PromptScreen> {
     text: '테스트 실패 원인을 분석하고 인증 미들웨어 패치를 제안해줘.',
   );
   final _promptFocusNode = FocusNode();
+  final Map<String, Set<String>> _selectedPatchHunksByPath = {};
 
   final Map<String, bool> _context = {
     'activeFile': true,
@@ -105,6 +106,7 @@ class _PromptScreenState extends State<PromptScreen> {
     'latestError': true,
     'workspaceSummary': false,
   };
+  bool _inlinePatchSelectionExpanded = false;
 
   int get _selectedContextCount =>
       _context.values.where((enabled) => enabled).length;
@@ -122,6 +124,7 @@ class _PromptScreenState extends State<PromptScreen> {
       animation: widget.controller,
       builder: (context, _) {
         _syncPromptDraft();
+        _syncPatchSelection();
 
         final shouldShowSyncBanner = widget
                 .controller.currentThreadId.isNotEmpty &&
@@ -146,7 +149,12 @@ class _PromptScreenState extends State<PromptScreen> {
                     controller: widget.controller,
                     onOpenReview: _showReviewSheet,
                     onApplyAllPatch: _applyAllPatchFromFeed,
+                    onApplySelectedPatch: _applySelectedPatchFromFeed,
                     onRunPrimaryProfile: _runPrimaryProfileFromFeed,
+                    patchSelectionExpanded: _inlinePatchSelectionExpanded,
+                    selectedPatchHunksByPath: _selectedPatchHunksByPath,
+                    onTogglePatchSelectionExpanded: _toggleInlinePatchSelection,
+                    onTogglePatchHunk: _togglePatchHunk,
                   ),
                   const SizedBox(height: 14),
                   _SectionCard(
@@ -231,6 +239,21 @@ class _PromptScreenState extends State<PromptScreen> {
     );
   }
 
+  Future<void> _applySelectedPatchFromFeed() async {
+    await widget.controller.applyPatch(
+      applyAll: false,
+      selectedByPath: _selectedPatchHunksByPath,
+    );
+    if (!mounted) {
+      return;
+    }
+    _showControllerSnack(
+      widget.controller.patchResultStatus.isNotEmpty
+          ? 'PATCH_RESULT: ${widget.controller.patchResultStatus} / ${widget.controller.patchResultMessage}'
+          : '선택한 패치 적용 요청을 보냈습니다.',
+    );
+  }
+
   Future<void> _runPrimaryProfileFromFeed() async {
     final profiles = widget.controller.runProfiles;
     if (profiles.isEmpty) {
@@ -247,7 +270,8 @@ class _PromptScreenState extends State<PromptScreen> {
       return;
     }
     _showControllerSnack(
-      widget.controller.runStatus.isNotEmpty || widget.controller.runSummary.isNotEmpty
+      widget.controller.runStatus.isNotEmpty ||
+              widget.controller.runSummary.isNotEmpty
           ? 'RUN_RESULT: ${widget.controller.runStatus} / ${widget.controller.runSummary}'
           : '${profile.displayLabel} 실행 요청을 보냈습니다.',
     );
@@ -281,12 +305,57 @@ class _PromptScreenState extends State<PromptScreen> {
     );
   }
 
+  void _syncPatchSelection() {
+    final files = widget.controller.patchFiles;
+    final paths = files.map((file) => file.path).toSet();
+    _selectedPatchHunksByPath.removeWhere((path, _) => !paths.contains(path));
+
+    for (final file in files) {
+      final selected = _selectedPatchHunksByPath.putIfAbsent(
+        file.path,
+        () => <String>{},
+      );
+      final validIds = file.hunks.map((hunk) => hunk.id).toSet();
+      selected.removeWhere((id) => !validIds.contains(id));
+      if (selected.isEmpty) {
+        _selectedPatchHunksByPath.remove(file.path);
+      }
+    }
+
+    if (files.isEmpty) {
+      _inlinePatchSelectionExpanded = false;
+    }
+  }
+
   Future<void> _showReviewSheet() async {
     await _showBottomSheet(
-      title: '패치와 실행',
-      subtitle: '패치 검토와 실행 결과를 세션 흐름에 붙여서 봅니다.',
+      title: '상세 패치와 실행',
+      subtitle: '메인 피드에서는 핵심만 보고, 여기서는 전체 diff와 실행 기록을 자세히 봅니다.',
       child: ReviewScreen(controller: widget.controller),
     );
+  }
+
+  void _toggleInlinePatchSelection() {
+    setState(() {
+      _inlinePatchSelectionExpanded = !_inlinePatchSelectionExpanded;
+    });
+  }
+
+  void _togglePatchHunk(String path, String hunkId, bool selected) {
+    setState(() {
+      final selectedSet = _selectedPatchHunksByPath.putIfAbsent(
+        path,
+        () => <String>{},
+      );
+      if (selected) {
+        selectedSet.add(hunkId);
+      } else {
+        selectedSet.remove(hunkId);
+      }
+      if (selectedSet.isEmpty) {
+        _selectedPatchHunksByPath.remove(path);
+      }
+    });
   }
 
   Future<void> _showContextSheet() async {
@@ -600,13 +669,24 @@ class _WorkstreamCard extends StatelessWidget {
     required this.controller,
     required this.onOpenReview,
     required this.onApplyAllPatch,
+    required this.onApplySelectedPatch,
     required this.onRunPrimaryProfile,
+    required this.patchSelectionExpanded,
+    required this.selectedPatchHunksByPath,
+    required this.onTogglePatchSelectionExpanded,
+    required this.onTogglePatchHunk,
   });
 
   final AppController controller;
   final VoidCallback onOpenReview;
   final Future<void> Function() onApplyAllPatch;
+  final Future<void> Function() onApplySelectedPatch;
   final Future<void> Function() onRunPrimaryProfile;
+  final bool patchSelectionExpanded;
+  final Map<String, Set<String>> selectedPatchHunksByPath;
+  final VoidCallback onTogglePatchSelectionExpanded;
+  final void Function(String path, String hunkId, bool selected)
+      onTogglePatchHunk;
 
   @override
   Widget build(BuildContext context) {
@@ -637,6 +717,10 @@ class _WorkstreamCard extends StatelessWidget {
     final patchSummary = controller.patchSummary.isNotEmpty
         ? controller.patchSummary
         : controller.patchAvailabilityReason;
+    final selectedPatchHunkCount = selectedPatchHunksByPath.values.fold<int>(
+      0,
+      (sum, item) => sum + item.length,
+    );
     final runSummary = controller.runSummary.isNotEmpty
         ? controller.runSummary
         : (primaryProfile == null
@@ -765,9 +849,21 @@ class _WorkstreamCard extends StatelessWidget {
                       controller.canApplyAllPatch ? '전체 적용' : null,
                   onPrimaryAction:
                       controller.canApplyAllPatch ? onApplyAllPatch : null,
-                  secondaryActionLabel: '상세 검토',
-                  onSecondaryAction: onOpenReview,
+                  secondaryActionLabel:
+                      patchSelectionExpanded ? '파일 선택 접기' : '파일별 선택',
+                  onSecondaryAction: onTogglePatchSelectionExpanded,
                 ),
+                if (patchSelectionExpanded) ...[
+                  const SizedBox(height: 10),
+                  _InlinePatchSelectionSurface(
+                    controller: controller,
+                    selectedByPath: selectedPatchHunksByPath,
+                    selectedHunkCount: selectedPatchHunkCount,
+                    onToggleHunk: onTogglePatchHunk,
+                    onApplySelectedPatch: onApplySelectedPatch,
+                    onOpenReview: onOpenReview,
+                  ),
+                ],
                 const SizedBox(height: 10),
                 _InlineActionCard(
                   title: '실행 확인',
@@ -775,12 +871,11 @@ class _WorkstreamCard extends StatelessWidget {
                   previewPaths: controller.topErrors.isNotEmpty
                       ? controller.topErrors.take(2).toList()
                       : controller.currentJobFiles.take(3).toList(),
-                  primaryActionLabel: primaryProfile == null
-                      ? null
-                      : '$primaryProfileLabel 실행',
+                  primaryActionLabel:
+                      primaryProfile == null ? null : '$primaryProfileLabel 실행',
                   onPrimaryAction:
                       primaryProfile == null ? null : onRunPrimaryProfile,
-                  secondaryActionLabel: '상세 검토',
+                  secondaryActionLabel: '상세 보기',
                   onSecondaryAction: onOpenReview,
                 ),
               ],
@@ -1413,6 +1508,224 @@ class _InlineActionCard extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _InlinePatchSelectionSurface extends StatelessWidget {
+  const _InlinePatchSelectionSurface({
+    required this.controller,
+    required this.selectedByPath,
+    required this.selectedHunkCount,
+    required this.onToggleHunk,
+    required this.onApplySelectedPatch,
+    required this.onOpenReview,
+  });
+
+  final AppController controller;
+  final Map<String, Set<String>> selectedByPath;
+  final int selectedHunkCount;
+  final void Function(String path, String hunkId, bool selected) onToggleHunk;
+  final Future<void> Function() onApplySelectedPatch;
+  final VoidCallback onOpenReview;
+
+  @override
+  Widget build(BuildContext context) {
+    final files = controller.patchFiles;
+    if (files.isEmpty) {
+      return _StreamSurface(
+        label: '파일별 선택',
+        accent: const Color(0xFF8EB7FF),
+        child: Text(
+          controller.patchAvailabilityReason,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: const Color(0xFFB7C4D2),
+                height: 1.45,
+              ),
+        ),
+      );
+    }
+
+    final totalHunks =
+        files.fold<int>(0, (sum, file) => sum + file.hunks.length);
+
+    return _StreamSurface(
+      label: '파일별 선택',
+      accent: const Color(0xFF8EB7FF),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _MetricPill(
+                icon: Icons.rule_folder_outlined,
+                label: '파일 ${files.length}개',
+                tone: const Color(0xFF4E8DFF),
+              ),
+              _MetricPill(
+                icon: Icons.segment_rounded,
+                label: '헝크 $totalHunks개',
+                tone: const Color(0xFFE4B15A),
+              ),
+              if (selectedHunkCount > 0)
+                _MetricPill(
+                  icon: Icons.checklist_rounded,
+                  label: '$selectedHunkCount개 선택',
+                  tone: const Color(0xFF2E9D78),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ...files.map(
+            (file) => _InlinePatchFileCard(
+              file: file,
+              selectedHunks: selectedByPath[file.path] ?? const <String>{},
+              onToggleHunk: (hunkId, selected) =>
+                  onToggleHunk(file.path, hunkId, selected),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              FilledButton.tonalIcon(
+                onPressed: selectedHunkCount == 0 ? null : onApplySelectedPatch,
+                style: FilledButton.styleFrom(
+                  foregroundColor: const Color(0xFFF4F7FB),
+                  backgroundColor: const Color(0xFF1F3A2E),
+                ),
+                icon: const Icon(Icons.done_outline_rounded),
+                label: const Text('선택 적용'),
+              ),
+              OutlinedButton.icon(
+                onPressed: onOpenReview,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFFDCE6F2),
+                  side: const BorderSide(color: Color(0xFF32404D)),
+                ),
+                icon: const Icon(Icons.open_in_new_rounded),
+                label: const Text('전체 시트 보기'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InlinePatchFileCard extends StatelessWidget {
+  const _InlinePatchFileCard({
+    required this.file,
+    required this.selectedHunks,
+    required this.onToggleHunk,
+  });
+
+  final PatchFileView file;
+  final Set<String> selectedHunks;
+  final void Function(String hunkId, bool selected) onToggleHunk;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFF091017),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFF202A35)),
+      ),
+      child: Theme(
+        data: theme.copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+          childrenPadding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+          iconColor: const Color(0xFFB7C4D2),
+          collapsedIconColor: const Color(0xFF8FA2B6),
+          title: Text(
+            file.path,
+            style: theme.textTheme.titleSmall?.copyWith(
+              color: const Color(0xFFF4F7FB),
+            ),
+          ),
+          subtitle: Text(
+            'status ${file.status.isEmpty ? "-" : file.status} / 헝크 ${file.hunks.length}개',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: const Color(0xFF93A4B7),
+            ),
+          ),
+          children: file.hunks.isEmpty
+              ? [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+                    child: Text(
+                      '표시할 상세 diff가 아직 없습니다.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: const Color(0xFF93A4B7),
+                      ),
+                    ),
+                  ),
+                ]
+              : file.hunks
+                  .map(
+                    (hunk) => Container(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0D141B),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFF24303B)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          CheckboxListTile(
+                            dense: true,
+                            controlAffinity: ListTileControlAffinity.leading,
+                            value: selectedHunks.contains(hunk.id),
+                            activeColor: const Color(0xFF2E9D78),
+                            checkColor: const Color(0xFF07120D),
+                            contentPadding:
+                                const EdgeInsets.symmetric(horizontal: 10),
+                            onChanged: (value) =>
+                                onToggleHunk(hunk.id, value ?? false),
+                            title: Text(
+                              hunk.header.isEmpty
+                                  ? hunk.id
+                                  : '${hunk.id} ${hunk.header}',
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: const Color(0xFFF4F7FB),
+                              ),
+                            ),
+                            subtitle: Text(
+                              hunk.risk.isEmpty
+                                  ? 'risk -'
+                                  : 'risk ${hunk.risk}',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: const Color(0xFF93A4B7),
+                              ),
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+                            child: SelectableText(
+                              hunk.diff,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: const Color(0xFFEAF1F8),
+                                fontFamily: 'monospace',
+                                height: 1.4,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                  .toList(),
+        ),
       ),
     );
   }

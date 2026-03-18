@@ -210,12 +210,17 @@
   - Cursor assistant 응답은 reasoning으로, context의 `todos`는 plan으로, terminal/files 맥락은 terminal/workspace surface로 우선 분리
   - generic context 이벤트가 assistant reasoning을 덮어쓰지 않도록 우선순위를 정리하고 focus도 workspace active file을 따라가게 보정
   - 검증: `go test ./internal/agent -run TestSessionStore`, `go test ./internal/agent -run 'TestHTTPServerSession(LiveUpdateEndpoint|TimelineAppendEndpoint)'` 통과
+- 2026-03-18 / 모바일 메인 피드 inline diff 선택 보강
+  - 메인 피드의 `패치 검토` 카드에서 파일별 diff 선택 surface를 직접 열고, 선택 적용을 바로 이어서 할 수 있게 정리
+  - review sheet는 기본 작업 표면이 아니라 전체 diff/실행 기록을 보는 상세 시트 역할로 축소
+  - smoke는 메인 피드에서 `파일별 선택 -> 선택 적용 surface 노출` 흐름을 기준으로 갱신
+  - 검증: `flutter analyze` 통과, 안전 경로 `flutter test test/app_smoke_test.dart` 통과
 
 ## 다음 작업 우선순위
 
 1. 세션 UX 기반 정리
-   - inline review 이후 상세 diff 선택/적용 UX를 더 줄이고 메인 피드와 연결 강화
    - 터미널 live state 및 이벤트 스키마를 IDE/mobile 양쪽에서 동일하게 다듬기
+   - 실행 결과, 최근 명령, 에러 포인터를 메인 피드와 터미널 표면 사이에서 더 자연스럽게 이어주기
 2. Cursor 패널 재구성
    - panel을 `채팅 + 작업 로그 + 터미널 + 파일 트리` 중심 레이아웃으로 개편
    - 현재 thread viewer 성격을 shared session workspace surface로 승격
