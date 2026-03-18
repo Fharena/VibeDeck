@@ -179,9 +179,12 @@ class DefaultThreadPanelController implements ThreadPanelController {
   private sessionStream: DisposableLike | undefined;
   private readonly editorSyncDisposables: DisposableLike[] = [];
   private editorSyncTimer: NodeJS.Timeout | undefined;
+  private sidebarReadyTimer: NodeJS.Timeout | undefined;
   private sessionStreamSessionId = "";
   private selectedThreadId = "";
   private composeMode = false;
+  private viewReady = false;
+  private preferPanelHost = false;
   private lastState: ThreadPanelViewState | undefined;
   private lastStatusMessage = "";
   private lastErrorMessage = "";
@@ -194,6 +197,11 @@ class DefaultThreadPanelController implements ThreadPanelController {
   }
 
   async openOrReveal(): Promise<void> {
+    if (this.preferPanelHost && this.panel) {
+      this.panel.reveal(this.vscode.viewColumn.one);
+      await this.refresh();
+      return;
+    }
     if (this.viewRegistration) {
       await this.revealSidebarView();
       if (this.view?.show) {
@@ -247,6 +255,10 @@ class DefaultThreadPanelController implements ThreadPanelController {
     this.stopRefreshLoop();
     this.stopEditorSync();
     this.stopSessionStream();
+    if (this.sidebarReadyTimer) {
+      clearTimeout(this.sidebarReadyTimer);
+      this.sidebarReadyTimer = undefined;
+    }
     this.viewRegistration?.dispose();
     this.view = undefined;
     const panel = this.panel;
@@ -268,7 +280,8 @@ class DefaultThreadPanelController implements ThreadPanelController {
 
   private attachView(view: ThreadPanelWebviewViewLike): void {
     this.view = view;
-    if (this.panel) {
+    this.viewReady = false;
+    if (this.panel && !this.preferPanelHost) {
       this.panel.dispose();
       this.panel = undefined;
     }
@@ -280,6 +293,7 @@ class DefaultThreadPanelController implements ThreadPanelController {
     view.webview.onDidReceiveMessage((message) => {
       void this.handleMessage(message);
     });
+    this.armSidebarReadyFallback();
     this.startEditorSync();
     this.restartRefreshLoop();
     void this.refresh();
@@ -305,6 +319,9 @@ class DefaultThreadPanelController implements ThreadPanelController {
   }
 
   private currentHost(): { webview: ThreadPanelWebviewLike; title?: string; description?: string } | undefined {
+    if (this.preferPanelHost && this.panel) {
+      return this.panel;
+    }
     return this.view ?? this.panel;
   }
 
@@ -397,6 +414,14 @@ class DefaultThreadPanelController implements ThreadPanelController {
     const message = objectValue(rawMessage) as unknown as ThreadPanelMessage;
     try {
       switch (text(message.type)) {
+        case "ready":
+          this.viewReady = true;
+          this.preferPanelHost = false;
+          if (this.sidebarReadyTimer) {
+            clearTimeout(this.sidebarReadyTimer);
+            this.sidebarReadyTimer = undefined;
+          }
+          return;
         case "refresh":
           await this.refresh();
           return;
@@ -902,6 +927,62 @@ class DefaultThreadPanelController implements ThreadPanelController {
       clearInterval(this.refreshTimer);
       this.refreshTimer = undefined;
     }
+  }
+
+  private armSidebarReadyFallback(): void {
+    if (!this.view) {
+      return;
+    }
+    if (this.sidebarReadyTimer) {
+      clearTimeout(this.sidebarReadyTimer);
+    }
+    this.sidebarReadyTimer = setTimeout(() => {
+      if (!this.view || this.viewReady) {
+        return;
+      }
+      void this.openFallbackPanel(
+        "Cursor 사이드바 렌더러가 응답하지 않아 편집기 패널로 전환했습니다.",
+      );
+    }, 1200);
+  }
+
+  private async openFallbackPanel(statusMessage: string): Promise<void> {
+    if (this.panel) {
+      this.preferPanelHost = true;
+      this.lastStatusMessage = statusMessage;
+      this.panel.reveal(this.vscode.viewColumn.one);
+      await this.refresh();
+      return;
+    }
+
+    const panel = this.vscode.window.createWebviewPanel(
+      "vibedeckThreadsFallback",
+      "VibeDeck 세션",
+      this.vscode.viewColumn.one,
+      {
+        enableScripts: true,
+        retainContextWhenHidden: true,
+      },
+    );
+
+    const nonce = randomBytes(16).toString("hex");
+    panel.webview.html = renderThreadPanelHtml(nonce);
+    panel.onDidDispose(() => {
+      if (this.panel === panel) {
+        this.panel = undefined;
+        this.preferPanelHost = false;
+      }
+    });
+    panel.webview.onDidReceiveMessage((message) => {
+      void this.handleMessage(message);
+    });
+
+    this.panel = panel;
+    this.preferPanelHost = true;
+    this.lastStatusMessage = statusMessage;
+    this.startEditorSync();
+    this.restartRefreshLoop();
+    await this.refresh();
   }
 
   private updatePanelTitle(state: ThreadPanelViewState): void {
@@ -1680,6 +1761,7 @@ function renderThreadPanelHtml(nonce: string): string {
 
     try {
     const vscode = acquireVsCodeApi();
+    vscode.postMessage({ type: "ready" });
     let state = emptyState();
     let draftPrompt = "";
     let draftSyncTimer = undefined;
