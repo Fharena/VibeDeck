@@ -1660,8 +1660,26 @@ function renderThreadPanelHtml(nonce: string): string {
   </style>
 </head>
 <body>
-  <div id="app"></div>
+  <div id="app"><div class="card flat"><div class="title">공유 세션을 불러오는 중...</div><div class="muted">잠시 후에도 바뀌지 않으면 VibeDeck: Show Bridge Status와 패널 오류 문구를 확인하세요.</div></div></div>
   <script nonce="${nonce}">
+    const appRoot = document.getElementById("app");
+    function renderFatalError(error) {
+      if (!appRoot) {
+        return;
+      }
+      const message = error instanceof Error ? (error.stack || error.message) : String(error || "알 수 없는 오류");
+      appRoot.innerHTML = '<div class="card flat"><div class="title">패널을 그리지 못했습니다.</div><div class="muted">아래 오류를 확인해 주세요.</div><pre>' + esc(message) + '</pre></div>';
+    }
+
+    window.addEventListener("error", function(event) {
+      renderFatalError(event.error || event.message);
+    });
+
+    window.addEventListener("unhandledrejection", function(event) {
+      renderFatalError(event.reason);
+    });
+
+    try {
     const vscode = acquireVsCodeApi();
     let state = emptyState();
     let draftPrompt = "";
@@ -2169,6 +2187,9 @@ function renderThreadPanelHtml(nonce: string): string {
 
     function attr(value) {
       return esc(value);
+    }
+    } catch (error) {
+      renderFatalError(error);
     }
   </script>
 </body>
