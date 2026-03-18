@@ -102,6 +102,7 @@ class AppController extends ChangeNotifier {
   String sessionSyncDetail = '';
   int sessionLastSyncedAt = 0;
   final Map<String, List<WorkspaceTreeEntryView>> _workspaceTreeByPath = {};
+  Timer? _workspaceTreeRefreshTimer;
   WorkspaceFileContentView workspaceFile = const WorkspaceFileContentView();
   String workspaceSelectedFilePath = '';
   bool workspaceFileLoading = false;
@@ -840,6 +841,7 @@ class AppController extends ChangeNotifier {
   }
 
   void _applySessionDetail(Map<String, dynamic> detail) {
+    final previousLiveSession = liveSession;
     currentThreadId = detail['thread'] is Map
         ? (detail['thread']['id']?.toString() ?? currentThreadId)
         : currentThreadId;
@@ -913,6 +915,8 @@ class AppController extends ChangeNotifier {
         ..clear()
         ..addAll(sessionOperation.currentJobFiles);
     }
+
+    _syncWorkspaceSurfaceFromLiveSession(previousLiveSession);
   }
 
   Future<void> _ensureSessionStream({bool force = false}) async {
@@ -1289,11 +1293,126 @@ class AppController extends ChangeNotifier {
   }
 
   void _clearWorkspaceBrowserState() {
+    _workspaceTreeRefreshTimer?.cancel();
+    _workspaceTreeRefreshTimer = null;
     _workspaceTreeByPath.clear();
     workspaceFile = const WorkspaceFileContentView();
     workspaceSelectedFilePath = '';
     workspaceFileLoading = false;
     workspaceFileError = null;
+  }
+
+  void _syncWorkspaceSurfaceFromLiveSession(SessionLiveView previousLiveSession) {
+    final previousFocusPath = _primaryLiveFocusPath(previousLiveSession);
+    final nextFocusPath = _primaryLiveFocusPath(liveSession);
+
+    if (nextFocusPath.isNotEmpty &&
+        (workspaceSelectedFilePath.isEmpty ||
+            workspaceSelectedFilePath == previousFocusPath)) {
+      workspaceSelectedFilePath = nextFocusPath;
+    }
+
+    if (_workspaceSurfaceSignature(previousLiveSession) ==
+        _workspaceSurfaceSignature(liveSession)) {
+      return;
+    }
+
+    _scheduleWorkspaceTreeRefresh();
+  }
+
+  String _primaryLiveFocusPath(SessionLiveView value) {
+    for (final candidate in [
+      value.focus.activeFilePath,
+      value.workspace.activeFilePath,
+      value.focus.patchPath,
+      value.focus.runErrorPath,
+    ]) {
+      final normalized = _normalizeWorkspacePath(candidate);
+      if (normalized.isNotEmpty) {
+        return normalized;
+      }
+    }
+    return '';
+  }
+
+  String _workspaceSurfaceSignature(SessionLiveView value) {
+    final changed = [
+      ...value.workspace.changedFiles,
+      ...value.workspace.patchFiles,
+    ]..sort();
+    return [
+      _normalizeWorkspacePath(value.focus.activeFilePath),
+      value.focus.selection.trim(),
+      _normalizeWorkspacePath(value.focus.patchPath),
+      _normalizeWorkspacePath(value.focus.runErrorPath),
+      value.focus.runErrorLine.toString(),
+      _normalizeWorkspacePath(value.workspace.activeFilePath),
+      ...changed.map(_normalizeWorkspacePath),
+    ].join('|');
+  }
+
+  void _scheduleWorkspaceTreeRefresh() {
+    if (_workspaceTreeByPath.isEmpty || currentThreadId.isEmpty) {
+      return;
+    }
+
+    _workspaceTreeRefreshTimer?.cancel();
+    _workspaceTreeRefreshTimer = Timer(
+      const Duration(milliseconds: 280),
+      () => unawaited(_refreshTrackedWorkspaceTrees()),
+    );
+  }
+
+  Future<void> _refreshTrackedWorkspaceTrees() async {
+    _workspaceTreeRefreshTimer?.cancel();
+    _workspaceTreeRefreshTimer = null;
+
+    final refreshTargets = _trackedWorkspaceTreePaths();
+    for (final path in refreshTargets) {
+      try {
+        await loadWorkspaceTree(path, force: true);
+      } catch (_) {
+        // live sync refresh 실패는 기존 파일 브라우저 상태를 유지한다.
+      }
+    }
+  }
+
+  List<String> _trackedWorkspaceTreePaths() {
+    final targets = <String>{};
+    if (_workspaceTreeByPath.containsKey('')) {
+      targets.add('');
+    }
+
+    final interestingFiles = <String>{
+      liveSession.focus.activeFilePath,
+      liveSession.workspace.activeFilePath,
+      liveSession.focus.patchPath,
+      liveSession.focus.runErrorPath,
+      ...liveSession.workspace.patchFiles,
+      ...liveSession.workspace.changedFiles,
+      ..._runChangedFiles,
+      ...sessionOperation.currentJobFiles,
+    }
+        .map(_normalizeWorkspacePath)
+        .where((item) => item.isNotEmpty)
+        .toList();
+
+    for (final filePath in interestingFiles) {
+      var parent = _workspaceParentPath(filePath);
+      while (true) {
+        if (_workspaceTreeByPath.containsKey(parent)) {
+          targets.add(parent);
+        }
+        if (parent.isEmpty) {
+          break;
+        }
+        parent = _workspaceParentPath(parent);
+      }
+    }
+
+    final ordered = targets.toList()
+      ..sort((a, b) => a.split('/').length.compareTo(b.split('/').length));
+    return ordered;
   }
 
   String _normalizeWorkspacePath(String value) {
@@ -1949,6 +2068,7 @@ class AppController extends ChangeNotifier {
   void dispose() {
     unawaited(_closeDirectSignalingSession());
     unawaited(_stopSessionStream());
+    _workspaceTreeRefreshTimer?.cancel();
     _api.dispose();
     super.dispose();
   }

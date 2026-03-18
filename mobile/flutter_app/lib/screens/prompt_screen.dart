@@ -1217,11 +1217,26 @@ class FileFocusSheet extends StatelessWidget {
       ...controller.patchFiles.map((file) => file.path),
     ]);
     final selection = focus.selection.trim();
-    final runError = focus.runErrorPath.trim().isEmpty
+    final primaryFocusPath = _firstNonEmptyText([
+      focus.activeFilePath,
+      workspace.activeFilePath,
+      focus.patchPath,
+      focus.runErrorPath,
+    ]);
+    final runErrorLocation = focus.runErrorPath.trim().isNotEmpty
+        ? _ErrorLocation(
+            path: focus.runErrorPath.trim(),
+            line: focus.runErrorLine,
+            message: '',
+          )
+        : (controller.topErrors.isEmpty
+            ? null
+            : _parseErrorLocation(controller.topErrors.first));
+    final runError = runErrorLocation == null
         ? ''
-        : focus.runErrorLine > 0
-            ? '${focus.runErrorPath.trim()}:${focus.runErrorLine}'
-            : focus.runErrorPath.trim();
+        : runErrorLocation.line > 0
+            ? '${runErrorLocation.path}:${runErrorLocation.line}'
+            : runErrorLocation.path;
     final hasData = rootPath.isNotEmpty ||
         focusPaths.isNotEmpty ||
         changedFiles.isNotEmpty ||
@@ -1248,6 +1263,44 @@ class FileFocusSheet extends StatelessWidget {
           ],
         ),
         if (hasData) ...[
+          if (primaryFocusPath.isNotEmpty || runErrorLocation != null) ...[
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                if (primaryFocusPath.isNotEmpty)
+                  FilledButton.tonalIcon(
+                    onPressed: () async {
+                      await controller.openWorkspaceLocation(primaryFocusPath);
+                    },
+                    style: FilledButton.styleFrom(
+                      foregroundColor: const Color(0xFFF4F7FB),
+                      backgroundColor: const Color(0xFF213244),
+                    ),
+                    icon: const Icon(Icons.visibility_outlined),
+                    label: const Text('포커스 열기'),
+                  ),
+                if (runErrorLocation != null)
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      await controller.openWorkspaceLocation(
+                        runErrorLocation.path,
+                        line: runErrorLocation.line <= 0
+                            ? 1
+                            : runErrorLocation.line,
+                      );
+                    },
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFFDCE6F2),
+                      side: const BorderSide(color: Color(0xFF32404D)),
+                    ),
+                    icon: const Icon(Icons.my_location_outlined),
+                    label: const Text('에러 열기'),
+                  ),
+              ],
+            ),
+          ],
           if (focusPaths.isNotEmpty) ...[
             const SizedBox(height: 12),
             _SheetListBlock(

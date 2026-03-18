@@ -51,6 +51,11 @@ class _WorkspaceDrawerTabState extends State<WorkspaceDrawerTab> {
     final rootPath = widget.controller.workspaceRootPath;
     final hasRootEntries = widget.controller.hasWorkspaceEntries('');
     final rootEntries = widget.controller.workspaceEntriesForPath('');
+    final focusPath = _primaryFocusPath(widget.controller);
+    final runError = _primaryRunError(widget.controller);
+    final hasLiveFocus = focusPath.isNotEmpty ||
+        widget.controller.liveSession.focus.selection.trim().isNotEmpty ||
+        runError != null;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
@@ -69,6 +74,15 @@ class _WorkspaceDrawerTabState extends State<WorkspaceDrawerTab> {
                   color: const Color(0xFF8FA0B3),
                 ),
           ),
+        if (hasLiveFocus) ...[
+          const SizedBox(height: 12),
+          _WorkspaceLiveSyncCard(
+            controller: widget.controller,
+            focusPath: focusPath,
+            runError: runError,
+            onInspectFile: widget.onInspectFile,
+          ),
+        ],
         const SizedBox(height: 12),
         if (rootPath.isEmpty)
           const _WorkspaceHint(
@@ -740,6 +754,123 @@ class _WorkspaceHint extends StatelessWidget {
   }
 }
 
+class _WorkspaceLiveSyncCard extends StatelessWidget {
+  const _WorkspaceLiveSyncCard({
+    required this.controller,
+    required this.focusPath,
+    required this.runError,
+    required this.onInspectFile,
+  });
+
+  final AppController controller;
+  final String focusPath;
+  final _WorkspaceRunError? runError;
+  final ValueChanged<String> onInspectFile;
+
+  @override
+  Widget build(BuildContext context) {
+    final selection = controller.liveSession.focus.selection.trim();
+    final changedCount = {
+      ...controller.liveSession.workspace.changedFiles,
+      ...controller.runChangedFiles,
+    }.where((item) => item.trim().isNotEmpty).length;
+    final patchCount = {
+      ...controller.liveSession.workspace.patchFiles,
+      ...controller.patchFiles.map((item) => item.path),
+    }.where((item) => item.trim().isNotEmpty).length;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0F141A),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF1B232C)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '실시간 포커스',
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  color: const Color(0xFFF4F7FB),
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              if (focusPath.isNotEmpty) const _FileMetaChip(label: '포커스 연결됨'),
+              if (changedCount > 0) _FileMetaChip(label: '변경 $changedCount개'),
+              if (patchCount > 0) _FileMetaChip(label: '패치 $patchCount개'),
+              if (runError != null) const _FileMetaChip(label: '에러 위치 있음'),
+            ],
+          ),
+          if (focusPath.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(
+              _compactPath(focusPath, keep: 56),
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: const Color(0xFFDCE6F2),
+                    height: 1.35,
+                  ),
+            ),
+          ],
+          if (selection.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              '선택: $selection',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: const Color(0xFF9FB0C0),
+                    height: 1.35,
+                  ),
+            ),
+          ],
+          if (runError != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              '최근 에러: ${runError!.label}',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: const Color(0xFFFFD5D2),
+                    height: 1.35,
+                  ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              if (focusPath.isNotEmpty)
+                FilledButton.tonalIcon(
+                  onPressed: () => onInspectFile(focusPath),
+                  icon: const Icon(Icons.visibility_outlined),
+                  label: const Text('포커스 보기'),
+                ),
+              if (runError != null)
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    await controller.openWorkspaceLocation(
+                      runError!.path,
+                      line: runError!.line <= 0 ? 1 : runError!.line,
+                    );
+                  },
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFFDCE6F2),
+                    side: const BorderSide(color: Color(0xFF32404D)),
+                  ),
+                  icon: const Icon(Icons.my_location_outlined),
+                  label: const Text('에러 열기'),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _FileMetaChip extends StatelessWidget {
   const _FileMetaChip({required this.label});
 
@@ -771,6 +902,72 @@ String _compactPath(String value, {int keep = 34}) {
     return trimmed;
   }
   return '...${trimmed.substring(trimmed.length - keep)}';
+}
+
+String _firstNonEmptyText(List<String> values) {
+  for (final value in values) {
+    final trimmed = value.trim();
+    if (trimmed.isNotEmpty) {
+      return trimmed;
+    }
+  }
+  return '';
+}
+
+String _primaryFocusPath(AppController controller) {
+  return _firstNonEmptyText([
+    controller.liveSession.focus.activeFilePath,
+    controller.liveSession.workspace.activeFilePath,
+    controller.liveSession.focus.patchPath,
+    controller.liveSession.focus.runErrorPath,
+  ]);
+}
+
+_WorkspaceRunError? _primaryRunError(AppController controller) {
+  final focus = controller.liveSession.focus;
+  if (focus.runErrorPath.trim().isNotEmpty) {
+    return _WorkspaceRunError(
+      path: focus.runErrorPath.trim(),
+      line: focus.runErrorLine,
+      label: focus.runErrorLine > 0
+          ? '${focus.runErrorPath.trim()}:${focus.runErrorLine}'
+          : focus.runErrorPath.trim(),
+    );
+  }
+
+  if (controller.topErrors.isEmpty) {
+    return null;
+  }
+  final match = RegExp(r'^(.+?):(\d+)\s*(.*)$').firstMatch(
+    controller.topErrors.first.trim(),
+  );
+  if (match == null) {
+    return null;
+  }
+
+  final path = match.group(1)?.trim() ?? '';
+  final line = int.tryParse(match.group(2) ?? '') ?? 1;
+  final message = match.group(3)?.trim() ?? '';
+  if (path.isEmpty) {
+    return null;
+  }
+  return _WorkspaceRunError(
+    path: path,
+    line: line,
+    label: message.isEmpty ? '$path:$line' : '$path:$line $message',
+  );
+}
+
+class _WorkspaceRunError {
+  const _WorkspaceRunError({
+    required this.path,
+    required this.line,
+    required this.label,
+  });
+
+  final String path;
+  final int line;
+  final String label;
 }
 
 String _displayStatus(WorkspaceTreeEntryView entry) {
