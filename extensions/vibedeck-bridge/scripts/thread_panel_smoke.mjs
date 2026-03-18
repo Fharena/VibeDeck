@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import http from "node:http";
+import vm from "node:vm";
 import { createBridgeExtensionController } from "../dist/bridgeExtensionController.js";
 
 const streamClients = new Map();
@@ -416,6 +417,9 @@ try {
   assert.match(fakeView.webview.html, /대화/);
   assert.match(fakeView.webview.html, /파일과 포커스/);
   assert.equal(fakeView.webview.options.enableScripts, true);
+  const embeddedScript = fakeView.webview.html.match(/<script nonce="[^"]*">([\s\S]*)<\/script>/)?.[1] ?? "";
+  assert.ok(embeddedScript, "thread panel html should include inline webview script");
+  assert.doesNotThrow(() => new vm.Script(embeddedScript), "thread panel inline script should parse");
   await waitFor(() => panelMessages.length > 0);
   assert.ok(panelMessages.length > 0, "panel should receive initial state");
 

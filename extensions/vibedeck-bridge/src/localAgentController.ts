@@ -131,6 +131,19 @@ class DefaultLocalAgentController implements LocalAgentController {
     }
 
     await this.stop();
+    const baseUrl = agentBaseUrl(settings);
+    if (await isAgentReady(baseUrl, 1200)) {
+      this.currentStatusValue = {
+        state: "running",
+        launchMode: settings.launchMode,
+        baseUrl,
+        command: `existing ${baseUrl}`,
+        repoRoot: settings.repoRoot,
+        outputTail: ["existing agent reused"],
+      };
+      this.emitChange();
+      return this.status();
+    }
 
     let resolvedLaunch: { command: string; args: string[]; cwd: string };
     try {
@@ -227,10 +240,10 @@ class DefaultLocalAgentController implements LocalAgentController {
       repoRoot: settings.repoRoot,
       outputTail: [],
     };
-    this.emitChange();
+      this.emitChange();
 
     try {
-      await waitForReady(agentBaseUrl(settings), settings.readyTimeoutMs, child);
+      await waitForReady(baseUrl, settings.readyTimeoutMs, child);
       this.currentStatusValue = {
         ...this.currentStatusValue,
         state: "running",
@@ -239,6 +252,18 @@ class DefaultLocalAgentController implements LocalAgentController {
       this.emitChange();
       return this.status();
     } catch (error) {
+      if (await isAgentReady(baseUrl, 1200)) {
+        this.activeProcess = undefined;
+        this.currentStatusValue = {
+          ...this.currentStatusValue,
+          state: "running",
+          pid: undefined,
+          command: `existing ${baseUrl}`,
+          outputTail: [...outputTail, "existing agent reused after bind conflict"],
+        };
+        this.emitChange();
+        return this.status();
+      }
       const message = error instanceof Error ? error.message : String(error);
       this.currentStatusValue = {
         ...this.currentStatusValue,
@@ -447,6 +472,15 @@ async function waitForReady(baseUrl: string, timeoutMs: number, child: ChildProc
     await delay(250);
   }
   throw new Error(`agent ready timeout after ${timeoutMs}ms (${lastError})`);
+}
+
+async function isAgentReady(baseUrl: string, timeoutMs: number): Promise<boolean> {
+  try {
+    const response = await httpGet(`${baseUrl}/healthz`, timeoutMs);
+    return response.statusCode === 200;
+  } catch {
+    return false;
+  }
 }
 
 async function waitForExit(child: ChildProcess, timeoutMs: number): Promise<void> {

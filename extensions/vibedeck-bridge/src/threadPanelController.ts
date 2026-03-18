@@ -2230,7 +2230,7 @@ function renderThreadPanelHtml(nonce: string): string {
     }
 
     function nl2br(value) {
-      return esc(value).replace(/\n/g, '<br />');
+      return esc(value).replace(/\\n/g, '<br />');
     }
 
     function renderCheckbox(key, label, checked) {
