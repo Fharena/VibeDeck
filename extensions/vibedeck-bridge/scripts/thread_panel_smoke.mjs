@@ -259,6 +259,7 @@ const fakePanel = {
   title: "",
   webview: {
     html: "",
+    options: {},
     onDidReceiveMessage(listener) {
       panelMessageHandler = listener;
       return { dispose() {} };
@@ -282,6 +283,7 @@ const fakeView = {
   show() {},
   webview: {
     html: "",
+    options: {},
     onDidReceiveMessage(listener) {
       panelMessageHandler = listener;
       return { dispose() {} };
@@ -413,6 +415,7 @@ try {
   assert.match(fakeView.webview.html, /VibeDeck 세션/);
   assert.match(fakeView.webview.html, /대화/);
   assert.match(fakeView.webview.html, /파일과 포커스/);
+  assert.equal(fakeView.webview.options.enableScripts, true);
   await waitFor(() => panelMessages.length > 0);
   assert.ok(panelMessages.length > 0, "panel should receive initial state");
 
@@ -493,6 +496,12 @@ try {
   for (const disposable of [...context.subscriptions].reverse()) {
     disposable.dispose();
   }
+  for (const res of streamClients.keys()) {
+    res.destroy();
+  }
+  streamClients.clear();
+  await tick();
+  await tick();
   await new Promise((resolve) => server.close(resolve));
 }
 

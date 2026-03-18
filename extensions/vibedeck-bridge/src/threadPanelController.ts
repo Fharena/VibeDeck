@@ -24,6 +24,10 @@ export interface ThreadPanelWorkspaceLike {
 
 export interface ThreadPanelWebviewLike {
   html: string;
+  options?: {
+    enableScripts?: boolean;
+    retainContextWhenHidden?: boolean;
+  };
   onDidReceiveMessage(listener: (message: unknown) => unknown): DisposableLike;
   postMessage(message: unknown): Promise<boolean> | Thenable<boolean>;
 }
@@ -268,6 +272,10 @@ class DefaultThreadPanelController implements ThreadPanelController {
       this.panel.dispose();
       this.panel = undefined;
     }
+    view.webview.options = {
+      enableScripts: true,
+      retainContextWhenHidden: true,
+    };
     const nonce = randomBytes(16).toString("hex");
     view.webview.html = renderThreadPanelHtml(nonce);
     view.webview.onDidReceiveMessage((message) => {
