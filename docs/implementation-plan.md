@@ -200,6 +200,11 @@
   - workspace root, 로컬 agent launch mode, binary/repo root 누락, login/trust/model 이슈에 대한 다음 행동을 바로 보이게 정리
   - doctor, agent env, smoke 명령을 상태창 안에서 바로 확인할 수 있게 정리
   - 검증: `npm --prefix extensions/vibedeck-bridge run build`, `npm --prefix extensions/vibedeck-bridge run smoke:bootstrap`, `npm --prefix extensions/vibedeck-bridge run smoke:extension` 통과
+- 2026-03-18 / Cursor 패널 작업 표면 재구성
+  - panel을 `세션 작업함 + 세션 피드 + 검토와 실행 + 터미널 + 작업공간` 구조로 재배치
+  - 세션 목록에 검색과 현재 세션 요약을 추가하고, 메인 화면은 thread viewer보다 shared session workspace surface에 가깝게 정리
+  - prompt context 옵션은 접어두고, reasoning/plan/tools/workspace/terminal 상태를 작업 중심으로 노출
+  - 검증: `npm --prefix extensions/vibedeck-bridge run build`, `npm --prefix extensions/vibedeck-bridge run smoke:panel` 통과
 
 ## 다음 작업 우선순위
 

@@ -373,7 +373,9 @@ try {
   await fakeVscode.commands.executeCommand("vibedeckBridge.openThreadPanel");
   await tick();
 
-  assert.match(fakePanel.webview.html, /VibeDeck Threads/);
+  assert.match(fakePanel.webview.html, /VibeDeck 세션/);
+  assert.match(fakePanel.webview.html, /세션 피드/);
+  assert.match(fakePanel.webview.html, /작업공간/);
   assert.ok(panelMessages.length > 0, "panel should receive initial state");
 
   await panelMessageHandler({
