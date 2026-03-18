@@ -92,7 +92,7 @@ const server = http.createServer(async (req, res) => {
         thread: {
           id: threadId,
           title: prompt.split("\n")[0] || "새 스레드",
-          sessionId: body.sid,
+          sessionId: threadId,
           state: "patch_ready",
           currentJobId: jobId,
           lastEventKind: "patch_ready",
@@ -159,7 +159,7 @@ const server = http.createServer(async (req, res) => {
         ],
       };
       state.threads = [detail.thread];
-      state.details.set(detail.thread.sessionId, detail);
+      state.details.set(detail.thread.id, detail);
       return json(res, 200, {
         responses: [
           { type: "PROMPT_ACK", payload: { threadId, jobId } },

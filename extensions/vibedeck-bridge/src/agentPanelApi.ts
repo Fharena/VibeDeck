@@ -739,11 +739,10 @@ function normalizeOperationState(
 function normalizeSessionSummary(item: Record<string, unknown>): AgentPanelThreadSummary {
   const sessionId = text(item.id);
   const threadId = text(item.threadId) || sessionId;
-  const controlSessionId = text(item.controlSessionId);
   return {
     id: threadId,
     title: text(item.title),
-    sessionId: controlSessionId || sessionId || "sid-vibedeck-panel",
+    sessionId: sessionId || threadId || "sid-vibedeck-panel",
     state: text(item.phase),
     currentJobId: text(item.currentJobId),
     lastEventKind: text(item.lastEventKind),
