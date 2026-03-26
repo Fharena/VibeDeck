@@ -154,6 +154,7 @@ export interface BridgeExtensionVscodeLike {
   };
   viewColumn: {
     one: number;
+    beside?: number;
   };
 }
 

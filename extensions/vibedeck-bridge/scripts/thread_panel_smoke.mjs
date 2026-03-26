@@ -369,7 +369,9 @@ const fakeVscode = {
         },
       };
     },
-    createWebviewPanel() {
+    createWebviewPanel(_viewType, title, _column, options) {
+      fakePanel.title = title;
+      fakePanel.webview.options = options;
       return fakePanel;
     },
   },
@@ -402,7 +404,7 @@ const fakeVscode = {
     },
   },
   statusBarAlignment: { left: 1 },
-  viewColumn: { one: 1 },
+  viewColumn: { one: 1, beside: 2 },
 };
 
 const controller = createBridgeExtensionController(fakeVscode);
@@ -413,13 +415,14 @@ try {
   await fakeVscode.commands.executeCommand("vibedeckBridge.openThreadPanel");
   await tick();
 
-  assert.match(fakeView.webview.html, /세션/);
-  assert.match(fakeView.webview.html, /새 세션/);
-  assert.match(fakeView.webview.html, /메시지/);
-  assert.match(fakeView.webview.html, /변경 반영/);
-  assert.match(fakeView.webview.html, /탭으로 열기|사이드바로/);
-  assert.equal(fakeView.webview.options.enableScripts, true);
-  const embeddedScript = fakeView.webview.html.match(/<script nonce="[^"]*">([\s\S]*)<\/script>/)?.[1] ?? "";
+  const activeHost = fakePanel.webview.html ? fakePanel.webview : fakeView.webview;
+  assert.match(activeHost.html, /세션/);
+  assert.match(activeHost.html, /새 세션/);
+  assert.match(activeHost.html, /메시지/);
+  assert.match(activeHost.html, /변경 반영/);
+  assert.match(activeHost.html, /탭으로 열기|사이드바로/);
+  assert.equal(activeHost.options.enableScripts, true);
+  const embeddedScript = activeHost.html.match(/<script nonce="[^"]*">([\s\S]*)<\/script>/)?.[1] ?? "";
   assert.ok(embeddedScript, "thread panel html should include inline webview script");
   assert.doesNotThrow(() => new vm.Script(embeddedScript), "thread panel inline script should parse");
   await waitFor(() => panelMessages.length > 0);
