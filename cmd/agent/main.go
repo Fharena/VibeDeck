@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net/http"
 	"os"
@@ -52,14 +53,17 @@ func main() {
 	p2pManager.SetControlMetrics(controlMetrics)
 	p2pManager.SetControlTimeouts(controlTimeouts)
 
+	httpServer := &http.Server{Addr: addr}
 	server := agent.NewHTTPServer(adapter, orchestrator, stateManager, ackTracker, controlMetrics, p2pManager, agent.HTTPServerConfig{
 		PublicAgentBaseURL:     agentPublicBaseURL,
 		PublicSignalingBaseURL: signalingPublicBaseURL,
 		ControlTimeouts:        controlTimeouts,
+		Shutdown:               httpServer.Shutdown,
 	})
+	httpServer.Handler = server.Handler()
 
 	log.Printf("agent server listening on %s (adapter=%s, threadStore=%s)", addr, adapter.Name(), threadStorePath)
-	if err := http.ListenAndServe(addr, server.Handler()); err != nil {
+	if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatal(err)
 	}
 }

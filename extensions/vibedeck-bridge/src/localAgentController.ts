@@ -44,6 +44,11 @@ interface ActiveProcess {
   bridgeAddress: string;
 }
 
+interface AgentRuntimeInfo {
+  name?: string;
+  ready?: boolean;
+}
+
 export interface LocalAgentController {
   start(settings: LocalAgentSettings, bridgeAddress: string): Promise<LocalAgentStatus>;
   stop(): Promise<void>;
@@ -166,16 +171,24 @@ class DefaultLocalAgentController implements LocalAgentController {
     await this.stop();
     const baseUrl = agentBaseUrl(settings);
     if (await isAgentReady(baseUrl, 1200)) {
-      this.currentStatusValue = {
-        state: "running",
-        launchMode: settings.launchMode,
-        baseUrl,
-        command: `existing ${baseUrl}`,
-        repoRoot: settings.repoRoot,
-        outputTail: ["existing agent reused"],
-      };
-      this.emitChange();
-      return this.status();
+      const stopped = await stopExistingManagedAgent(baseUrl, settings.port, settings.readyTimeoutMs);
+      if (await isAgentReady(baseUrl, 1200)) {
+        this.currentStatusValue = {
+          state: "error",
+          launchMode: settings.launchMode,
+          baseUrl,
+          command: settings.launchMode,
+          repoRoot: settings.repoRoot,
+          lastError: stopped
+            ? "기존 agent 재시작 대기 중에 포트가 계속 점유되어 있습니다."
+            : "기존 VibeDeck agent를 정리하지 못했습니다. agent 포트(8080)를 쓰는 프로세스를 확인해주세요.",
+          outputTail: stopped
+            ? ["기존 agent 종료 후에도 포트가 유지되었습니다."]
+            : ["기존 agent 종료 실패"],
+        };
+        this.emitChange();
+        return this.status();
+      }
     }
 
     let resolvedLaunch: { command: string; args: string[]; cwd: string };
@@ -292,16 +305,7 @@ class DefaultLocalAgentController implements LocalAgentController {
       return this.status();
     } catch (error) {
       if (await isAgentReady(baseUrl, 1200)) {
-        this.activeProcess = undefined;
-        this.currentStatusValue = {
-          ...this.currentStatusValue,
-          state: "running",
-          pid: undefined,
-          command: `existing ${baseUrl}`,
-          outputTail: [...outputTail, "existing agent reused after bind conflict"],
-        };
-        this.emitChange();
-        return this.status();
+        await stopExistingManagedAgent(baseUrl, settings.port, 2500);
       }
       const message = error instanceof Error ? error.message : String(error);
       this.currentStatusValue = {
@@ -549,13 +553,163 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function stopExistingManagedAgent(
+  baseUrl: string,
+  port: number,
+  timeoutMs: number,
+): Promise<boolean> {
+  const runtimeInfo = await readAgentRuntimeInfo(baseUrl, 1200);
+  if (!looksLikeManagedAgent(runtimeInfo)) {
+    return false;
+  }
+
+  await requestAgentShutdown(baseUrl, timeoutMs);
+  if (await waitUntilAgentStops(baseUrl, timeoutMs)) {
+    return true;
+  }
+
+  const killed = await killProcessListeningOnPort(port);
+  if (!killed) {
+    return false;
+  }
+  return await waitUntilAgentStops(baseUrl, timeoutMs);
+}
+
+async function waitUntilAgentStops(baseUrl: string, timeoutMs: number): Promise<boolean> {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    if (!(await isAgentReady(baseUrl, 800))) {
+      return true;
+    }
+    await delay(200);
+  }
+  return !(await isAgentReady(baseUrl, 800));
+}
+
+async function readAgentRuntimeInfo(
+  baseUrl: string,
+  timeoutMs: number,
+): Promise<AgentRuntimeInfo | undefined> {
+  try {
+    const response = await httpRequest(`${baseUrl}/v1/agent/runtime/adapter`, "GET", timeoutMs);
+    if (response.statusCode !== 200) {
+      return undefined;
+    }
+    const value = JSON.parse(response.body) as Record<string, unknown>;
+    return {
+      name: typeof value.name === "string" ? value.name : undefined,
+      ready: value.ready === true,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+function looksLikeManagedAgent(info: AgentRuntimeInfo | undefined): boolean {
+  return info?.ready === true && typeof info.name === "string" && info.name.length > 0;
+}
+
+async function requestAgentShutdown(baseUrl: string, timeoutMs: number): Promise<boolean> {
+  try {
+    const response = await httpRequest(
+      `${baseUrl}/v1/agent/runtime/shutdown`,
+      "POST",
+      timeoutMs,
+      JSON.stringify({ reason: "extension restart" }),
+      "application/json",
+    );
+    return response.statusCode === 200;
+  } catch {
+    return false;
+  }
+}
+
+async function killProcessListeningOnPort(port: number): Promise<boolean> {
+  const pids = await findListeningPids(port);
+  if (pids.length === 0) {
+    return false;
+  }
+
+  let killed = false;
+  for (const pid of pids) {
+    if (!(await killProcessByPid(pid))) {
+      continue;
+    }
+    killed = true;
+  }
+  return killed;
+}
+
+async function findListeningPids(port: number): Promise<number[]> {
+  try {
+    if (process.platform === "win32") {
+      const result = await runCommandCapture("powershell.exe", [
+        "-NoProfile",
+        "-Command",
+        `$items = Get-NetTCPConnection -State Listen -LocalPort ${port} -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique; foreach ($item in $items) { Write-Output $item }`,
+      ]);
+      return result.stdout
+        .split(/\r?\n/)
+        .map((line) => Number.parseInt(line.trim(), 10))
+        .filter((value) => Number.isFinite(value) && value > 0);
+    }
+
+    const result = await runCommandCapture("sh", [
+      "-lc",
+      `lsof -ti tcp:${port} -sTCP:LISTEN 2>/dev/null || true`,
+    ]);
+    return result.stdout
+      .split(/\r?\n/)
+      .map((line) => Number.parseInt(line.trim(), 10))
+      .filter((value) => Number.isFinite(value) && value > 0);
+  } catch {
+    return [];
+  }
+}
+
+async function killProcessByPid(pid: number): Promise<boolean> {
+  try {
+    if (process.platform === "win32") {
+      const result = await runCommandCapture("taskkill", ["/PID", String(pid), "/T", "/F"]);
+      return result.exitCode === 0;
+    }
+
+    const result = await runCommandCapture("kill", ["-TERM", String(pid)]);
+    return result.exitCode === 0;
+  } catch {
+    return false;
+  }
+}
+
 async function httpGet(
   targetUrl: string,
   timeoutMs: number,
 ): Promise<{ statusCode: number; body: string }> {
+  return await httpRequest(targetUrl, "GET", timeoutMs);
+}
+
+async function httpRequest(
+  targetUrl: string,
+  method: "GET" | "POST",
+  timeoutMs: number,
+  body?: string,
+  contentType?: string,
+): Promise<{ statusCode: number; body: string }> {
   return await new Promise((resolve, reject) => {
-    const client = targetUrl.startsWith("https:") ? https : http;
-    const request = client.get(targetUrl, (response) => {
+    const requestFactory = targetUrl.startsWith("https:") ? https.request : http.request;
+    const request = requestFactory(
+      targetUrl,
+      {
+        method,
+        headers:
+          body && contentType
+            ? {
+                "Content-Type": contentType,
+                "Content-Length": Buffer.byteLength(body),
+              }
+            : undefined,
+      },
+      (response) => {
       let body = "";
       response.setEncoding("utf8");
       response.on("data", (chunk) => {
@@ -568,15 +722,49 @@ async function httpGet(
           body,
         });
       });
-    });
+      },
+    );
 
     const timer = setTimeout(() => {
       request.destroy(new Error("request timeout"));
     }, timeoutMs);
 
+    if (body) {
+      request.write(body);
+    }
+    request.end();
+
     request.on("error", (error) => {
       clearTimeout(timer);
       reject(error);
+    });
+  });
+}
+
+async function runCommandCapture(
+  command: string,
+  args: string[],
+): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  return await new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout?.on("data", (chunk) => {
+      stdout += String(chunk);
+    });
+    child.stderr?.on("data", (chunk) => {
+      stderr += String(chunk);
+    });
+    child.once("error", (error) => reject(error));
+    child.once("close", (code) => {
+      resolve({
+        stdout,
+        stderr,
+        exitCode: code ?? -1,
+      });
     });
   });
 }

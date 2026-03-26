@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"net"
 	"net/http"
 	"net/url"
@@ -13,6 +14,7 @@ type HTTPServerConfig struct {
 	PublicSignalingBaseURL     string
 	BootstrapRecentThreadLimit int
 	ControlTimeouts            ControlTimeoutConfig
+	Shutdown                   func(context.Context) error
 }
 
 type BootstrapResponse struct {
