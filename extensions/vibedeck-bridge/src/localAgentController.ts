@@ -21,6 +21,10 @@ export interface LocalAgentSettings {
   runProfileFile?: string;
   signalingBaseUrl: string;
   readyTimeoutMs: number;
+  controlTimeoutDefaultMs: number;
+  controlTimeoutPromptSubmitMs: number;
+  controlTimeoutPatchApplyMs: number;
+  controlTimeoutRunProfileMs: number;
 }
 
 export interface LocalAgentStatus {
@@ -52,6 +56,10 @@ export interface LocalAgentControllerOptions {
 }
 
 const DEFAULT_READY_TIMEOUT_MS = 15000;
+const DEFAULT_CONTROL_TIMEOUT_DEFAULT_MS = 5000;
+const DEFAULT_CONTROL_TIMEOUT_PROMPT_SUBMIT_MS = 300000;
+const DEFAULT_CONTROL_TIMEOUT_PATCH_APPLY_MS = 30000;
+const DEFAULT_CONTROL_TIMEOUT_RUN_PROFILE_MS = 300000;
 const OUTPUT_TAIL_LIMIT = 12;
 const DEFAULT_AGENT_BASE_URL = "http://127.0.0.1:8080";
 
@@ -96,6 +104,31 @@ export function readLocalAgentSettings(
     readyTimeoutMs: normalizeDuration(
       config.get<number>("agent.readyTimeoutMs", DEFAULT_READY_TIMEOUT_MS),
       DEFAULT_READY_TIMEOUT_MS,
+    ),
+    controlTimeoutDefaultMs: normalizeDuration(
+      config.get<number>("agent.controlTimeoutDefaultMs", DEFAULT_CONTROL_TIMEOUT_DEFAULT_MS),
+      DEFAULT_CONTROL_TIMEOUT_DEFAULT_MS,
+    ),
+    controlTimeoutPromptSubmitMs: normalizeDuration(
+      config.get<number>(
+        "agent.controlTimeoutPromptSubmitMs",
+        DEFAULT_CONTROL_TIMEOUT_PROMPT_SUBMIT_MS,
+      ),
+      DEFAULT_CONTROL_TIMEOUT_PROMPT_SUBMIT_MS,
+    ),
+    controlTimeoutPatchApplyMs: normalizeDuration(
+      config.get<number>(
+        "agent.controlTimeoutPatchApplyMs",
+        DEFAULT_CONTROL_TIMEOUT_PATCH_APPLY_MS,
+      ),
+      DEFAULT_CONTROL_TIMEOUT_PATCH_APPLY_MS,
+    ),
+    controlTimeoutRunProfileMs: normalizeDuration(
+      config.get<number>(
+        "agent.controlTimeoutRunProfileMs",
+        DEFAULT_CONTROL_TIMEOUT_RUN_PROFILE_MS,
+      ),
+      DEFAULT_CONTROL_TIMEOUT_RUN_PROFILE_MS,
     ),
   };
 }
@@ -168,6 +201,12 @@ class DefaultLocalAgentController implements LocalAgentController {
       AGENT_ADDR: listenAddress(settings),
       CURSOR_BRIDGE_TCP_ADDR: bridgeAddress,
       SIGNALING_BASE_URL: settings.signalingBaseUrl,
+      CONTROL_TIMEOUT_DEFAULT: formatDurationEnvValue(settings.controlTimeoutDefaultMs),
+      CONTROL_TIMEOUT_PROMPT_SUBMIT: formatDurationEnvValue(
+        settings.controlTimeoutPromptSubmitMs,
+      ),
+      CONTROL_TIMEOUT_PATCH_APPLY: formatDurationEnvValue(settings.controlTimeoutPatchApplyMs),
+      CONTROL_TIMEOUT_RUN_PROFILE: formatDurationEnvValue(settings.controlTimeoutRunProfileMs),
     };
     if (settings.runProfileFile) {
       env.RUN_PROFILE_FILE = settings.runProfileFile;
@@ -378,6 +417,10 @@ function normalizeDuration(value: number, fallback: number): number {
     return fallback;
   }
   return Math.trunc(value);
+}
+
+function formatDurationEnvValue(valueMs: number): string {
+  return `${Math.trunc(valueMs)}ms`;
 }
 
 function readHost(value: string | undefined): string {

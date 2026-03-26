@@ -54,11 +54,12 @@ type p2pRuntime struct {
 }
 
 type P2PSessionManager struct {
-	stateManager   *runtime.StateManager
-	ackTracker     *runtime.AckTracker
-	controlMetrics *ControlMetrics
-	controlRouter  *ControlRouter
-	httpClient     *http.Client
+	stateManager    *runtime.StateManager
+	ackTracker      *runtime.AckTracker
+	controlMetrics  *ControlMetrics
+	controlRouter   *ControlRouter
+	controlTimeouts ControlTimeoutConfig
+	httpClient      *http.Client
 
 	defaultSignalingBaseURL string
 
@@ -74,9 +75,10 @@ func NewP2PSessionManager(stateManager *runtime.StateManager, ackTracker *runtim
 	}
 
 	return &P2PSessionManager{
-		stateManager:  stateManager,
-		ackTracker:    ackTracker,
-		controlRouter: NewControlRouter(orchestrator, ackTracker),
+		stateManager:    stateManager,
+		ackTracker:      ackTracker,
+		controlRouter:   NewControlRouter(orchestrator, ackTracker),
+		controlTimeouts: DefaultControlTimeoutConfig(),
 		httpClient: &http.Client{
 			Timeout: 6 * time.Second,
 		},
@@ -93,6 +95,12 @@ func (m *P2PSessionManager) SetControlMetrics(metrics *ControlMetrics) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.controlMetrics = metrics
+}
+
+func (m *P2PSessionManager) SetControlTimeouts(cfg ControlTimeoutConfig) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.controlTimeouts = normalizeControlTimeoutConfig(cfg)
 }
 
 func (m *P2PSessionManager) DefaultSignalingBaseURL() string {
@@ -402,7 +410,7 @@ func (m *P2PSessionManager) peerMessageLoop(ctx context.Context, rt *p2pRuntime)
 			}
 
 			startedAt := time.Now()
-			handleCtx, cancel := context.WithTimeout(ctx, controlEnvelopeTimeout(env.Type))
+			handleCtx, cancel := context.WithTimeout(ctx, m.controlTimeouts.TimeoutFor(env.Type))
 			result, err := m.controlRouter.HandleEnvelope(handleCtx, env)
 			cancel()
 			if env.Type != protocol.TypeCmdAck && m.controlMetrics != nil {

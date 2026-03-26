@@ -244,12 +244,17 @@
   - `Open Mobile Bootstrap` 진입 시 local agent가 꺼져 있으면 먼저 자동으로 시작을 시도하도록 보강
   - 부트스트랩 패널과 오류 메시지에 `vibedeckBridge.agent.host=0.0.0.0`, `VibeDeck: Restart Local Agent`, `signaling` 별도 실행 필요를 한국어로 명시
   - 검증: `npm --prefix extensions/vibedeck-bridge run build` 통과, `npm --prefix extensions/vibedeck-bridge run smoke:mobile-bootstrap` 통과
+- 2026-03-26 / control timeout budget 운영 설정 외부화
+  - agent의 HTTP/P2P control timeout을 환경변수(`CONTROL_TIMEOUT_DEFAULT`, `CONTROL_TIMEOUT_PROMPT_SUBMIT`, `CONTROL_TIMEOUT_PATCH_APPLY`, `CONTROL_TIMEOUT_RUN_PROFILE`)로 조정할 수 있게 정리
+  - extension local agent 설정(`vibedeckBridge.agent.controlTimeout*Ms`)이 같은 값을 agent 프로세스에 주입하고, built-in cursor-agent provider timeout도 기본적으로 agent prompt/run timeout을 따라가도록 보강
+  - bootstrap/status 표면에 현재 적용된 control timeout 값을 노출해 모바일과 PC 진단이 같은 운영 값을 보도록 정리
+  - 검증: `go test ./internal/agent -run "Test(ControlEnvelopeTimeout|LoadControlTimeoutConfigFromEnv|HTTPServerBootstrapEndpoint)"` 통과, `npm --prefix extensions/vibedeck-bridge run smoke:bootstrap` 통과, 안전 경로 `flutter test test/bootstrap_settings_test.dart` 통과, 안전 경로 변경 파일 대상 `flutter analyze` 통과
 
 ## 다음 작업 우선순위
 
-1. control timeout budget 운영 설정 외부화
-2. 설치 산출물 버전 관리/릴리스 자동화
-3. Cursor 외 provider(Codex/Claude Code/Antigravity) 확장용 adapter mode 정리
+1. 설치 산출물 버전 관리/릴리스 자동화
+2. Cursor 외 provider(Codex/Claude Code/Antigravity) 확장용 adapter mode 정리
+3. provider별 setup/packaging smoke 정리
 
 주의:
 - provider 확장은 Cursor 기반 unified session 흐름이 충분히 완성된 뒤에 진행한다.

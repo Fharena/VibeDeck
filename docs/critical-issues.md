@@ -240,6 +240,9 @@
 - 영구 대응:
   - timeout budget을 환경변수 또는 운영 설정으로 외부화
   - runtime metrics에 handler latency/timeout 비율을 추가해 조기 경고 가능하게 함(완료: `/v1/agent/runtime/metrics` + `/metrics`에 control 집계 추가)
+- 2026-03-26 업데이트:
+  - agent가 `CONTROL_TIMEOUT_DEFAULT`, `CONTROL_TIMEOUT_PROMPT_SUBMIT`, `CONTROL_TIMEOUT_PATCH_APPLY`, `CONTROL_TIMEOUT_RUN_PROFILE` 환경변수로 timeout budget을 직접 읽도록 정리
+  - bootstrap 응답에 현재 적용된 control timeout 값을 실어 모바일/PC 상태 화면에서 같은 운영 값을 확인할 수 있게 함
 - 학습 포인트:
   - fixture가 빠르게 응답한다고 해서 운영 timeout budget이 충분한 것은 아니며, 실제 AI latency를 기준으로 제어면 budget을 따로 설계해야 함
 ### 2026-03-08 / RUNTIME-004 / 실제 GUI extension host + Cursor Agent 첫 호출이 2분 budget을 초과
@@ -254,6 +257,9 @@
   - timeout budget을 환경변수 또는 운영 설정으로 외부화
   - 첫 호출 latency와 steady-state latency를 분리 관측해 budget을 재조정
   - 장기적으로는 `PROMPT_SUBMIT`을 비동기 job kickoff와 상태 polling으로 분리 검토
+- 2026-03-26 업데이트:
+  - extension local agent 설정에 `vibedeckBridge.agent.controlTimeout*Ms`를 추가해 agent control timeout을 UI 설정으로 직접 조정할 수 있게 함
+  - built-in cursor-agent provider의 `promptTimeoutMs`, `runTimeoutMs`는 `0`일 때 agent prompt/run timeout을 따라가도록 정리
 - 학습 포인트:
   - fixture가 빠르게 응답한다고 운영 budget이 충분한 것은 아니며, 실제 GUI/LLM warm-up 비용을 기준으로 제어면 deadline을 설계해야 함
 

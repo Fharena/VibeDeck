@@ -96,7 +96,7 @@ func (s *HTTPServer) handleEnvelope(w http.ResponseWriter, r *http.Request) {
 	}
 
 	startedAt := time.Now()
-	ctx, cancel := context.WithTimeout(r.Context(), controlEnvelopeTimeout(env.Type))
+	ctx, cancel := context.WithTimeout(r.Context(), s.config.ControlTimeouts.TimeoutFor(env.Type))
 	defer cancel()
 
 	result, err := s.controlRouter.HandleEnvelope(ctx, env)
