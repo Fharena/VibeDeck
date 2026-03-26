@@ -1662,6 +1662,16 @@ function renderThreadPanelHtml(nonce: string): string {
     summary { cursor: pointer; padding: 10px 12px; color: var(--muted); }
     pre { margin: 0; padding: 12px; background: #10141b; border: 1px solid var(--line-soft); border-radius: 12px; overflow: auto; white-space: pre-wrap; word-break: break-word; font-family: var(--font-mono); font-size: 12px; line-height: 1.55; max-height: 260px; }
     .layout { display: grid; grid-template-columns: 272px minmax(0, 1fr); min-height: 100vh; background: rgba(8, 10, 14, 0.28); }
+    .main-shell { min-height: 100vh; display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; gap: 12px; background: rgba(8, 10, 14, 0.28); padding: 14px 16px; position: relative; }
+    .chat-stack { min-height: 0; }
+    .topbar-shell { position: sticky; top: 0; z-index: 3; }
+    .topbar { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; }
+    .topbar-main { min-width: 0; display: grid; gap: 4px; }
+    .topbar-title { font-size: 16px; font-weight: 700; line-height: 1.35; color: #f4f7fb; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .topbar-subtitle { color: var(--muted); font-size: 12px; line-height: 1.5; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden; }
+    .topbar-actions { display: flex; gap: 8px; align-items: center; }
+    .toolbar-button { border-radius: 999px; padding: 8px 12px; background: #11151c; border: 1px solid var(--line-soft); color: #dfe6f7; font-size: 12px; }
+    .toolbar-button.active { border-color: rgba(124, 184, 255, 0.35); background: rgba(47, 69, 99, 0.34); }
     .sidebar { padding: 16px 14px; border-right: 1px solid var(--line); background: linear-gradient(180deg, #0b0e14 0%, var(--sidebar) 100%); display: grid; gap: 12px; align-content: start; }
     .main { padding: 14px 16px; display: grid; gap: 12px; align-content: start; min-width: 0; }
     .workspace-shell { display: grid; gap: 12px; align-items: start; }
@@ -1741,8 +1751,18 @@ function renderThreadPanelHtml(nonce: string): string {
     .utility-tab.active { border-color: rgba(124, 184, 255, 0.35); background: rgba(47, 69, 99, 0.34); color: #e6eefb; }
     .utility-body { display: grid; gap: 10px; }
     .utility-hint { color: var(--muted); font-size: 12px; }
+    .drawer-backdrop { position: fixed; inset: 0; background: rgba(5, 7, 10, 0.56); z-index: 18; }
+    .panel-drawer { position: fixed; top: 10px; bottom: 10px; width: min(360px, calc(100vw - 24px)); border: 1px solid var(--line); border-radius: 20px; background: linear-gradient(180deg, rgba(14, 17, 23, 0.99) 0%, rgba(10, 13, 19, 0.99) 100%); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.36); z-index: 19; display: grid; gap: 12px; align-content: start; padding: 16px; overflow: auto; }
+    .panel-drawer.left { left: 10px; }
+    .panel-drawer.right { right: 10px; }
+    .drawer-head { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+    .drawer-title { font-size: 14px; font-weight: 700; color: #f4f7fb; }
+    .drawer-subtitle { color: var(--muted); font-size: 12px; line-height: 1.45; }
+    .drawer-close { border-radius: 999px; padding: 6px 10px; background: #11151c; border: 1px solid var(--line-soft); color: var(--muted); font-size: 12px; }
+    .drawer-content { display: grid; gap: 12px; }
+    .timeline { align-content: start; max-height: calc(100vh - 300px); overflow: auto; padding-right: 4px; }
     @media (max-width: 1180px) { .two-col, .checkbox-grid { grid-template-columns: 1fr; } .message.user, .message.assistant { margin-left: 0; margin-right: 0; } }
-    @media (max-width: 960px) { .layout { grid-template-columns: 1fr; } .sidebar { border-right: 0; border-bottom: 1px solid var(--line); } }
+    @media (max-width: 960px) { .layout { grid-template-columns: 1fr; } .sidebar { border-right: 0; border-bottom: 1px solid var(--line); } .main-shell { padding-left: 12px; padding-right: 12px; } .panel-drawer { width: calc(100vw - 20px); left: 10px; right: 10px; } }
   </style>
 </head>
 <body>
@@ -1777,6 +1797,8 @@ function renderThreadPanelHtml(nonce: string): string {
     let selectedRunProfileId = "";
     let threadFilter = "";
     let activeUtilityTab = "";
+    let showThreadDrawer = false;
+    let showSupportDrawer = false;
     let contextOptions = {
       includeActiveFile: true,
       includeSelection: false,
@@ -1807,18 +1829,44 @@ function renderThreadPanelHtml(nonce: string): string {
         post("refresh");
         return;
       }
+      if (action === "toggle-thread-drawer") {
+        showThreadDrawer = !showThreadDrawer;
+        if (showThreadDrawer) {
+          showSupportDrawer = false;
+        }
+        render();
+        return;
+      }
+      if (action === "toggle-support-drawer") {
+        showSupportDrawer = !showSupportDrawer;
+        if (showSupportDrawer) {
+          showThreadDrawer = false;
+          activeUtilityTab = pickUtilityTab(activeUtilityTab);
+        }
+        render();
+        return;
+      }
+      if (action === "close-drawers") {
+        showThreadDrawer = false;
+        showSupportDrawer = false;
+        render();
+        return;
+      }
       if (action === "new-thread") {
         draftPrompt = "";
+        showThreadDrawer = false;
         post("new-thread");
         return;
       }
       if (action === "select-thread") {
         draftPrompt = "";
+        showThreadDrawer = false;
         post("select-thread", { threadId: target.dataset.threadId || "" });
         return;
       }
       if (action === "select-utility-tab") {
         activeUtilityTab = target.dataset.tab || "review";
+        showSupportDrawer = true;
         render();
         return;
       }
@@ -1914,29 +1962,71 @@ function renderThreadPanelHtml(nonce: string): string {
       }
       const promptValue = draftPrompt || (state.composeMode ? "" : (state.live.composer.draftText || state.derived.promptText));
       app.innerHTML = [
-        '<div class="layout">',
-        '  <aside class="sidebar">',
-        '    <div class="sidebar-top">',
-        '      <div class="row spread"><div><div class="eyebrow">공유 세션</div><div class="title">세션</div></div><button class="ghost" data-action="refresh">새로고침</button></div>',
-        '      <input id="thread-filter" class="search" placeholder="세션 검색" value="' + attr(threadFilter) + '" />',
-        '      <button class="primary block" data-action="new-thread">새 세션</button>',
-        '    </div>',
-        '    <div class="sidebar-summary">' + renderSidebarSummary() + '</div>',
-        '    <div class="threads">' + renderThreads() + '</div>',
-        '  </aside>',
-        '  <main class="main">',
+        '<div class="main-shell">',
         renderBanner(),
-        '    <section class="workspace-shell">',
-        '      <div class="chat-shell">',
-        '        <section class="card flat chat-panel">' + renderSessionHeader() + '</section>',
-        renderHighlights(),
-        '        <section class="card chat-panel timeline-card"><div class="section-head"><div><div class="title">대화</div><div class="muted">요청, 응답, 검토 결과만 기본으로 보여줍니다.</div></div></div>' + renderTimeline() + '</section>',
-        '        <section class="card flat">' + renderComposer(promptValue) + '</section>',
-        '        <section class="card flat utility-panel">' + renderUtilityPanel() + '</section>',
-        '      </div>',
-        '    </section>',
-        '  </main>',
+        '  <section class="card flat topbar-shell">' + renderTopBar() + '</section>',
+        '  <section class="chat-stack">',
+        '    <section class="card chat-panel timeline-card"><div class="section-head"><div><div class="title">대화</div><div class="muted">요청, 응답, 패치/실행 결과만 기본으로 보여줍니다.</div></div></div>' + renderTimeline() + '</section>',
+        '  </section>',
+        '  <section class="card flat">' + renderComposer(promptValue) + '</section>',
+        renderThreadDrawer(),
+        renderSupportDrawer(),
         '</div>',
+      ].join('');
+    }
+
+    function renderTopBar() {
+      const title = state.composeMode ? '새 세션' : ((state.currentThread && state.currentThread.title) || '세션을 선택하세요');
+      const summary = state.live.activity.summary || ((state.currentThread && state.currentThread.lastEventText) || '채팅을 시작하면 결과가 여기에 이어집니다.');
+      const phase = state.operation.phase || ((state.currentThread && state.currentThread.state) || '-');
+      return [
+        '<div class="topbar">',
+        '  <div class="topbar-actions"><button class="toolbar-button ' + (showThreadDrawer ? 'active' : '') + '" data-action="toggle-thread-drawer">세션</button></div>',
+        '  <div class="topbar-main"><div class="topbar-title">' + esc(title) + '</div><div class="topbar-subtitle">' + esc(summary) + '</div></div>',
+        '  <div class="topbar-actions"><span class="badge ' + badgeTone(phase) + '">' + esc(phase) + '</span><button class="toolbar-button" data-action="new-thread">새 세션</button><button class="toolbar-button ' + (showSupportDrawer ? 'active' : '') + '" data-action="toggle-support-drawer">패널</button></div>',
+        '</div>',
+      ].join('');
+    }
+
+    function renderThreadDrawer() {
+      if (!showThreadDrawer) {
+        return '';
+      }
+      return [
+        '<button class="drawer-backdrop" data-action="close-drawers" aria-label="드로어 닫기"></button>',
+        '<aside class="panel-drawer left">',
+        '  <div class="drawer-head"><div><div class="drawer-title">세션</div><div class="drawer-subtitle">현재 스레드와 새 세션 시작만 여기서 관리합니다.</div></div><button class="drawer-close" data-action="close-drawers">닫기</button></div>',
+        '  <div class="drawer-content">',
+        '    <input id="thread-filter" class="search" placeholder="세션 검색" value="' + attr(threadFilter) + '" />',
+        '    <div class="row spread"><button class="primary block" data-action="new-thread">새 세션</button><button class="ghost" data-action="refresh">새로고침</button></div>',
+        '    <div class="threads">' + renderThreads() + '</div>',
+        '  </div>',
+        '</aside>',
+      ].join('');
+    }
+
+    function renderSupportDrawer() {
+      if (!showSupportDrawer) {
+        return '';
+      }
+      const tab = pickUtilityTab(activeUtilityTab);
+      activeUtilityTab = tab;
+      const tabs = [
+        { id: 'review', label: '검토' },
+        { id: 'run', label: '실행' },
+        { id: 'workspace', label: '파일' },
+      ];
+      return [
+        '<button class="drawer-backdrop" data-action="close-drawers" aria-label="드로어 닫기"></button>',
+        '<aside class="panel-drawer right">',
+        '  <div class="drawer-head"><div><div class="drawer-title">보조 패널</div><div class="drawer-subtitle">채팅 밖의 검토, 실행, 파일 정보만 여기서 펼칩니다.</div></div><button class="drawer-close" data-action="close-drawers">닫기</button></div>',
+        '  <div class="drawer-content">',
+        '    <div class="utility-tabs">' + tabs.map(function(item) {
+          return '<button class="utility-tab ' + (item.id === tab ? 'active' : '') + '" data-action="select-utility-tab" data-tab="' + attr(item.id) + '">' + esc(item.label) + '</button>';
+        }).join('') + '</div>',
+        '    <div class="utility-body">' + renderUtilityTabContent(tab) + '</div>',
+        '  </div>',
+        '</aside>',
       ].join('');
     }
 
