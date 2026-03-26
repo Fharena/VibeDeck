@@ -43,6 +43,7 @@ func (s *HTTPServer) Handler() http.Handler {
 	mux.HandleFunc("/v1/agent/runtime/state", s.handleRuntimeState)
 	mux.HandleFunc("/v1/agent/runtime/metrics", s.handleRuntimeMetrics)
 	mux.HandleFunc("/v1/agent/runtime/adapter", s.handleRuntimeAdapter)
+	mux.HandleFunc("/v1/agent/runtime/shutdown", s.handleRuntimeShutdown)
 	mux.HandleFunc("/v1/agent/bootstrap", s.handleBootstrap)
 	mux.HandleFunc("/v1/agent/runtime/acks/expired", s.handleExpiredAcks)
 	mux.HandleFunc("/v1/agent/runtime/acks/pending", s.handlePendingAcks)
@@ -258,6 +259,29 @@ func (s *HTTPServer) handleRuntimeAdapter(w http.ResponseWriter, r *http.Request
 		info = provider.RuntimeInfo()
 	}
 	writeJSON(w, http.StatusOK, info)
+}
+
+func (s *HTTPServer) handleRuntimeShutdown(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	if s.config.Shutdown == nil {
+		writeJSON(w, http.StatusNotImplemented, map[string]string{"error": "shutdown not configured"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"accepted": true})
+	if flusher, ok := w.(http.Flusher); ok {
+		flusher.Flush()
+	}
+
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		_ = s.config.Shutdown(ctx)
+	}()
 }
 
 func (s *HTTPServer) handleRunProfiles(w http.ResponseWriter, r *http.Request) {

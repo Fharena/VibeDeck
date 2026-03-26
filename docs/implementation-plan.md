@@ -249,6 +249,10 @@
   - extension local agent 설정(`vibedeckBridge.agent.controlTimeout*Ms`)이 같은 값을 agent 프로세스에 주입하고, built-in cursor-agent provider timeout도 기본적으로 agent prompt/run timeout을 따라가도록 보강
   - bootstrap/status 표면에 현재 적용된 control timeout 값을 노출해 모바일과 PC 진단이 같은 운영 값을 보도록 정리
   - 검증: `go test ./internal/agent -run "Test(ControlEnvelopeTimeout|LoadControlTimeoutConfigFromEnv|HTTPServerBootstrapEndpoint)"` 통과, `npm --prefix extensions/vibedeck-bridge run smoke:bootstrap` 통과, 안전 경로 `flutter test test/bootstrap_settings_test.dart` 통과, 안전 경로 변경 파일 대상 `flutter analyze` 통과
+- 2026-03-26 / stale local agent 재사용 정리
+  - extension local agent가 bridge 재시작 뒤 기존 8080 agent를 그대로 재사용하지 않고, 먼저 종료한 뒤 새 bridge 기준으로 다시 시작하도록 정리
+  - agent에 `/v1/agent/runtime/shutdown` 엔드포인트를 추가해 extension이 안전하게 종료를 요청할 수 있게 하고, 종료 실패 시에는 포트 점유 프로세스 정리 경로로 폴백
+  - 검증: `go test ./internal/agent -run "TestHTTPServerRuntime(Adapter|Shutdown)|TestHTTPServerBootstrapEndpoint"` 통과, `npm --prefix extensions/vibedeck-bridge run build` 통과, `npm --prefix extensions/vibedeck-bridge run smoke:bootstrap` 통과
 
 ## 다음 작업 우선순위
 

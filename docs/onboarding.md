@@ -152,3 +152,4 @@ cd .\mobile\flutter_app
   - agent 수동 실행: `CONTROL_TIMEOUT_DEFAULT`, `CONTROL_TIMEOUT_PROMPT_SUBMIT`, `CONTROL_TIMEOUT_PATCH_APPLY`, `CONTROL_TIMEOUT_RUN_PROFILE`
   - extension local agent: `vibedeckBridge.agent.controlTimeoutDefaultMs`, `vibedeckBridge.agent.controlTimeoutPromptSubmitMs`, `vibedeckBridge.agent.controlTimeoutPatchApplyMs`, `vibedeckBridge.agent.controlTimeoutRunProfileMs`
   - built-in cursor-agent provider timeout은 `vibedeckBridge.cursorAgent.promptTimeoutMs`, `vibedeckBridge.cursorAgent.runTimeoutMs`로 별도 override 가능하며, `0`이면 agent prompt/run timeout 값을 따른다
+- extension/bridge를 다시 띄운 뒤 `adapter get context failed`가 보이면 최신 빌드에서는 local agent를 새 bridge 기준으로 다시 띄우도록 정리됐다. `VibeDeck: Restart Local Agent`를 한 번 실행하면 기존 8080 agent를 먼저 정리한 뒤 다시 시작한다.

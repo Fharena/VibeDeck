@@ -144,6 +144,32 @@ func TestHTTPServerRuntimeAdapter(t *testing.T) {
 	}
 }
 
+func TestHTTPServerRuntimeShutdown(t *testing.T) {
+	shutdownCalled := make(chan struct{}, 1)
+	server, _, _ := newTestHTTPServer()
+	server.config.Shutdown = func(_ context.Context) error {
+		select {
+		case shutdownCalled <- struct{}{}:
+		default:
+		}
+		return nil
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/agent/runtime/shutdown", nil)
+	rec := httptest.NewRecorder()
+	server.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+
+	select {
+	case <-shutdownCalled:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("expected shutdown callback to be called")
+	}
+}
+
 func TestHTTPServerRunProfilesAndThreadsEndpoints(t *testing.T) {
 	server, _, _ := newTestHTTPServer()
 
