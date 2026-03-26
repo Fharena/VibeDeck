@@ -2248,14 +2248,17 @@ function renderThreadPanelHtml(nonce: string): string {
 
     function eventBody(item, headline) {
       const kind = String(item.kind || '').toLowerCase();
+      const summary = item.data && item.data.summary != null ? String(item.data.summary) : '';
+      const message = item.data && item.data.message != null ? String(item.data.message) : '';
+      const excerpt = item.data && item.data.excerpt != null ? String(item.data.excerpt) : '';
       if (kind === 'patch_ready') {
-        return text(item.data.summary) || item.body || '';
+        return summary || item.body || '';
       }
       if (kind === 'patch_applied' || kind === 'patch_result') {
-        return item.body || text(item.data.message) || '';
+        return item.body || message || '';
       }
       if (kind === 'run_finished' || kind === 'run_result') {
-        return text(item.data.summary) || item.body || text(item.data.excerpt) || '';
+        return summary || item.body || excerpt || '';
       }
       const raw = item.body || '';
       if (raw && raw !== headline) {
