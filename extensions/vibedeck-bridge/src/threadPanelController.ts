@@ -1664,19 +1664,20 @@ function renderThreadPanelHtml(nonce: string): string {
     .layout { display: grid; grid-template-columns: 272px minmax(0, 1fr); min-height: 100vh; background: rgba(8, 10, 14, 0.28); }
     .sidebar { padding: 16px 14px; border-right: 1px solid var(--line); background: linear-gradient(180deg, #0b0e14 0%, var(--sidebar) 100%); display: grid; gap: 12px; align-content: start; }
     .main { padding: 14px 16px; display: grid; gap: 12px; align-content: start; min-width: 0; }
-    .workspace-shell { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 12px; align-items: start; }
+    .workspace-shell { display: grid; gap: 12px; align-items: start; }
     .chat-shell { display: grid; gap: 12px; min-width: 0; }
     .card { border: 1px solid var(--line); border-radius: 16px; background: linear-gradient(180deg, rgba(27, 31, 39, 0.96) 0%, rgba(20, 24, 31, 0.98) 100%); padding: 14px; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.18); }
     .card.flat { background: rgba(22, 26, 33, 0.94); box-shadow: none; }
     .stack { display: grid; gap: 12px; }
     .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
     .spread { justify-content: space-between; }
-    .threads, .files, .errors, .mini-list, .path-list, .timeline, .summary-strip, .rail-stack { display: grid; gap: 10px; }
+    .threads, .files, .errors, .mini-list, .path-list, .timeline, .summary-strip { display: grid; gap: 10px; }
     .sidebar-top { display: grid; gap: 10px; }
     .thread { width: 100%; text-align: left; padding: 12px; border-radius: 14px; background: #12161d; }
     .thread.active { border-color: #406186; background: rgba(47, 69, 99, 0.38); box-shadow: inset 0 0 0 1px rgba(124, 184, 255, 0.18); }
     .thread .thread-title { font-size: 13px; font-weight: 600; line-height: 1.45; }
     .thread .thread-meta { display: flex; justify-content: space-between; gap: 8px; margin-top: 8px; color: var(--muted); font-size: 11px; }
+    .thread .thread-state { color: #b9c6d8; font-size: 11px; }
     .thread .thread-body { margin-top: 6px; color: var(--muted); font-size: 12px; line-height: 1.5; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
     .muted { color: var(--muted); font-size: 12px; line-height: 1.55; }
     .eyebrow { color: var(--muted); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; }
@@ -1695,7 +1696,7 @@ function renderThreadPanelHtml(nonce: string): string {
     .badge.warn { color: var(--warn); }
     .sidebar-summary { border: 1px solid var(--line-soft); border-radius: 14px; padding: 12px; background: #11151d; }
     .composer-shell { display: grid; gap: 12px; }
-    .composer-actions { display: grid; grid-template-columns: minmax(0, 1fr) 190px auto auto; gap: 10px; align-items: center; }
+    .composer-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
     .checkbox-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 0 12px 12px; }
     .checkbox { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
     .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -1716,6 +1717,7 @@ function renderThreadPanelHtml(nonce: string): string {
     .session-bar .session-main { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
     .session-bar .session-title { font-size: 18px; font-weight: 700; line-height: 1.35; }
     .session-bar .session-summary { color: var(--muted); font-size: 13px; line-height: 1.6; max-width: 920px; }
+    .session-meta { display: flex; flex-wrap: wrap; gap: 8px 12px; color: var(--muted); font-size: 12px; }
     .chat-panel { display: grid; gap: 12px; }
     .timeline-card { min-height: 420px; }
     .timeline { align-content: start; }
@@ -1733,9 +1735,13 @@ function renderThreadPanelHtml(nonce: string): string {
     .message-body { color: #dfe6f7; font-size: 13px; line-height: 1.65; }
     .message-body code { font-family: var(--font-mono); }
     .message-chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
-    .rail-card { border: 1px solid var(--line); border-radius: 16px; background: linear-gradient(180deg, rgba(25, 29, 37, 0.98) 0%, rgba(18, 22, 29, 0.98) 100%); padding: 14px; }
-    .rail-card .section-head { margin-bottom: 2px; }
-    @media (max-width: 1180px) { .workspace-shell, .two-col, .checkbox-grid, .composer-actions { grid-template-columns: 1fr; } .message.user, .message.assistant { margin-left: 0; margin-right: 0; } }
+    .utility-panel { display: grid; gap: 12px; }
+    .utility-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+    .utility-tab { border: 1px solid var(--line-soft); border-radius: 999px; padding: 8px 12px; background: #11151c; color: var(--muted); font-size: 12px; }
+    .utility-tab.active { border-color: rgba(124, 184, 255, 0.35); background: rgba(47, 69, 99, 0.34); color: #e6eefb; }
+    .utility-body { display: grid; gap: 10px; }
+    .utility-hint { color: var(--muted); font-size: 12px; }
+    @media (max-width: 1180px) { .two-col, .checkbox-grid { grid-template-columns: 1fr; } .message.user, .message.assistant { margin-left: 0; margin-right: 0; } }
     @media (max-width: 960px) { .layout { grid-template-columns: 1fr; } .sidebar { border-right: 0; border-bottom: 1px solid var(--line); } }
   </style>
 </head>
@@ -1770,6 +1776,7 @@ function renderThreadPanelHtml(nonce: string): string {
     let draftSyncTimer = undefined;
     let selectedRunProfileId = "";
     let threadFilter = "";
+    let activeUtilityTab = "";
     let contextOptions = {
       includeActiveFile: true,
       includeSelection: false,
@@ -1786,6 +1793,7 @@ function renderThreadPanelHtml(nonce: string): string {
       if (!selectedRunProfileId || !state.runProfiles.some(function(profile) { return profile.id === selectedRunProfileId; })) {
         selectedRunProfileId = state.derived.runProfileId || (state.runProfiles[0] ? state.runProfiles[0].id : "");
       }
+      activeUtilityTab = pickUtilityTab(activeUtilityTab);
       render();
     });
 
@@ -1807,6 +1815,11 @@ function renderThreadPanelHtml(nonce: string): string {
       if (action === "select-thread") {
         draftPrompt = "";
         post("select-thread", { threadId: target.dataset.threadId || "" });
+        return;
+      }
+      if (action === "select-utility-tab") {
+        activeUtilityTab = target.dataset.tab || "review";
+        render();
         return;
       }
       if (action === "submit-prompt") {
@@ -1917,14 +1930,10 @@ function renderThreadPanelHtml(nonce: string): string {
         '      <div class="chat-shell">',
         '        <section class="card flat chat-panel">' + renderSessionHeader() + '</section>',
         renderHighlights(),
-        '        <section class="card chat-panel timeline-card"><div class="section-head"><div><div class="title">대화</div><div class="muted">모바일과 패널이 같은 세션 흐름을 이어서 봅니다.</div></div><span class="badge">' + esc(String(state.events.length)) + '개 이벤트</span></div>' + renderTimeline() + '</section>',
+        '        <section class="card chat-panel timeline-card"><div class="section-head"><div><div class="title">대화</div><div class="muted">요청, 응답, 검토 결과만 기본으로 보여줍니다.</div></div></div>' + renderTimeline() + '</section>',
         '        <section class="card flat">' + renderComposer(promptValue) + '</section>',
+        '        <section class="card flat utility-panel">' + renderUtilityPanel() + '</section>',
         '      </div>',
-        '      <aside class="rail-stack">',
-        '        <section class="rail-card"><div class="section-head"><div><div class="title">검토</div><div class="muted">패치와 적용 상태를 여기서 이어 봅니다.</div></div></div>' + renderReview() + '</section>',
-        '        <section class="rail-card"><div class="section-head"><div><div class="title">실행</div><div class="muted">최근 명령, 출력, 오류를 빠르게 확인합니다.</div></div></div>' + renderTerminal() + '</section>',
-        '        <section class="rail-card"><div class="section-head"><div><div class="title">파일과 포커스</div><div class="muted">현재 파일, 변경 파일, 포커스 위치입니다.</div></div></div>' + renderWorkspace() + '</section>',
-        '      </aside>',
         '    </section>',
         '  </main>',
         '</div>',
@@ -1933,12 +1942,11 @@ function renderThreadPanelHtml(nonce: string): string {
 
     function renderSidebarSummary() {
       const title = state.composeMode ? '새 세션' : ((state.currentThread && state.currentThread.title) || '선택된 세션 없음');
-      const stateText = state.operation.phase || ((state.currentThread && state.currentThread.state) || '-');
       const activity = state.live.activity.summary || ((state.currentThread && state.currentThread.lastEventText) || '아직 작업 기록이 없습니다.');
       return [
         '<div class="eyebrow">현재 세션</div>',
         '<div class="title small">' + esc(title) + '</div>',
-        '<div class="row"><span class="badge ' + badgeTone(stateText) + '">' + esc(stateText) + '</span><span class="muted">' + esc(fmt((state.currentThread && state.currentThread.updatedAt) || state.refreshedAt, false)) + '</span></div>',
+        '<div class="muted">' + esc(fmt((state.currentThread && state.currentThread.updatedAt) || state.refreshedAt, false)) + '</div>',
         '<div class="muted">' + esc(activity) + '</div>',
       ].join('');
     }
@@ -1947,9 +1955,6 @@ function renderThreadPanelHtml(nonce: string): string {
       const items = [];
       if (state.errorMessage) {
         items.push('<section class="notice error"><div class="title small">오류</div><div class="muted">' + esc(state.errorMessage) + '</div></section>');
-      }
-      if (state.statusMessage) {
-        items.push('<section class="notice info"><div class="title small">상태</div><div class="muted">' + esc(state.statusMessage) + '</div></section>');
       }
       if (!state.adapter.ready && !state.errorMessage) {
         items.push('<section class="notice"><div class="title small">연결 준비</div><div class="muted">agent가 아직 응답하지 않으면 ' + esc(state.agentBaseUrl) + ' 주소와 vibedeck_doctor.ps1 결과를 먼저 확인하세요.</div></section>');
@@ -1973,7 +1978,7 @@ function renderThreadPanelHtml(nonce: string): string {
       }
       return threads.map(function(thread) {
         const active = !state.composeMode && thread.id === state.selectedThreadId;
-        return '<button class="thread ' + (active ? 'active' : '') + '" data-action="select-thread" data-thread-id="' + attr(thread.id) + '"><div class="head"><div class="thread-title">' + esc(thread.title || thread.id) + '</div><span class="badge ' + badgeTone(thread.state) + '">' + esc(thread.state || '-') + '</span></div><div class="thread-meta"><span>' + esc(fmt(thread.updatedAt, false)) + '</span><span>' + esc(thread.lastEventKind || '-') + '</span></div><div class="thread-body">' + esc(thread.lastEventText || '아직 기록이 없습니다.') + '</div></button>';
+        return '<button class="thread ' + (active ? 'active' : '') + '" data-action="select-thread" data-thread-id="' + attr(thread.id) + '"><div class="head"><div class="thread-title">' + esc(thread.title || thread.id) + '</div><span class="muted">' + esc(fmt(thread.updatedAt, false)) + '</span></div><div class="thread-meta"><span class="thread-state">' + esc(thread.state || '-') + '</span></div><div class="thread-body">' + esc(compactThreadPreview(thread)) + '</div></button>';
       }).join('');
     }
 
@@ -1994,25 +1999,26 @@ function renderThreadPanelHtml(nonce: string): string {
       const activeFilePath = state.live.workspace.activeFilePath || state.live.focus.activeFilePath || '';
       const terminalStatus = state.live.terminal.status || state.derived.runStatus || '';
       const changedCount = state.live.workspace.changedFiles.length || state.derived.currentJobFiles.length || 0;
-      const participants = state.live.participants.length;
+      const meta = [];
+      if (activeFilePath) {
+        meta.push('<span>현재 파일 · ' + esc(activeFilePath) + '</span>');
+      }
+      if (terminalStatus) {
+        meta.push('<span>실행 · ' + esc(terminalStatus) + '</span>');
+      }
+      if (changedCount) {
+        meta.push('<span>변경 파일 · ' + esc(String(changedCount)) + '</span>');
+      }
       return [
         '<div class="session-bar">',
         '  <div class="session-main">',
         '    <div class="stack">',
-        '      <div class="eyebrow">공유 세션</div>',
         '      <div class="session-title">' + esc(title) + '</div>',
         '      <div class="session-summary">' + esc(summary) + '</div>',
         '    </div>',
         '    <span class="badge ' + badgeTone(state.operation.phase || (state.currentThread && state.currentThread.state) || '-') + '">' + esc(state.operation.phase || ((state.currentThread && state.currentThread.state) || '-')) + '</span>',
         '  </div>',
-        '  <div class="row">',
-        '    <span class="pill ' + (state.adapter.ready ? 'ok' : 'bad') + '">브리지 ' + esc(state.adapter.name || '-') + '</span>',
-        (activeFilePath ? '<span class="pill focus">포커스 ' + esc(activeFilePath) + '</span>' : ''),
-        (terminalStatus ? '<span class="pill">실행 ' + esc(terminalStatus) + '</span>' : ''),
-        (changedCount ? '<span class="pill">변경 ' + esc(String(changedCount)) + '</span>' : ''),
-        (participants ? '<span class="pill">참여 ' + esc(String(participants)) + '</span>' : ''),
-        '    <span class="pill">업데이트 ' + esc(fmt((state.currentThread && state.currentThread.updatedAt) || state.refreshedAt, false)) + '</span>',
-        '  </div>',
+        (meta.length ? '  <div class="session-meta">' + meta.join('') + '</div>' : ''),
         '</div>',
       ].join('');
     }
@@ -2020,15 +2026,13 @@ function renderThreadPanelHtml(nonce: string): string {
     function renderComposer(promptValue) {
       return [
         '<div class="composer-shell">',
-        '<div class="section-head"><div><div class="title">메시지</div><div class="muted">현재 세션에 다음 작업을 바로 보냅니다.</div></div><span class="badge">' + esc(state.composeMode ? '새 세션' : '현재 세션') + '</span></div>',
+        '<div class="section-head"><div><div class="title">메시지</div><div class="muted">채팅에 집중하고 검토, 실행, 파일은 아래 토글에서 이어갑니다.</div></div><span class="badge">' + esc(state.composeMode ? '새 세션' : '현재 세션') + '</span></div>',
         '<textarea id="prompt-input" placeholder="예: src/hello.py 파일에 간단한 스크립트를 추가해줘">' + esc(promptValue) + '</textarea>',
         '<div class="composer-actions">',
         '  <button class="primary" data-action="submit-prompt">전송</button>',
-        '  <select id="run-profile-select">' + renderRunProfiles() + '</select>',
-        '  <button class="secondary" data-action="run-profile"' + (state.currentJobId && selectedRunProfileId ? '' : ' disabled') + '>실행</button>',
-        '  <button data-action="apply-patch"' + (state.currentJobId && state.derived.patchFiles.length ? '' : ' disabled') + '>패치 적용</button>',
+        '  <span class="utility-hint">실행과 파일 확인은 아래 토글 패널에서 이어집니다.</span>',
         '</div>',
-        '<details><summary>컨텍스트 옵션</summary><div class="checkbox-grid">',
+        '<details><summary>고급 옵션</summary><div class="checkbox-grid">',
         renderCheckbox('includeActiveFile', '현재 파일', contextOptions.includeActiveFile),
         renderCheckbox('includeSelection', '선택 영역', contextOptions.includeSelection),
         renderCheckbox('includeLatestError', '최근 오류', contextOptions.includeLatestError),
@@ -2041,16 +2045,10 @@ function renderThreadPanelHtml(nonce: string): string {
     function renderHighlights() {
       const items = [];
       if (state.live.reasoning.summary) {
-        items.push('<div class="summary-card"><div class="list-label">판단</div><strong>' + esc(state.live.reasoning.title || '현재 판단') + '</strong><div class="muted">' + esc(state.live.reasoning.summary) + '</div></div>');
+        items.push('<div class="summary-card"><div class="list-label">현재 요약</div><strong>' + esc(state.live.reasoning.title || '현재 판단') + '</strong><div class="muted">' + esc(state.live.reasoning.summary) + '</div></div>');
       }
       if (state.live.plan.summary || (state.live.plan.items && state.live.plan.items.length)) {
-        items.push('<div class="summary-card"><div class="list-label">계획</div><strong>' + esc(state.live.plan.summary || '작업 단계') + '</strong><div class="mini-list">' + state.live.plan.items.slice(0, 3).map(function(item) { return '<div class="muted">[' + esc(item.status || '-') + '] ' + esc(item.label || item.detail || '-') + '</div>'; }).join('') + '</div></div>');
-      }
-      if (state.live.tools.currentLabel || (state.live.tools.activities && state.live.tools.activities.length)) {
-        items.push('<div class="summary-card"><div class="list-label">도구 활동</div><strong>' + esc(state.live.tools.currentLabel || '최근 도구') + '</strong><div class="mini-list">' + state.live.tools.activities.slice(0, 3).map(function(item) { return '<div class="muted">' + esc(item.label || item.kind || '-') + ' · ' + esc(item.status || '-') + '</div>'; }).join('') + '</div></div>');
-      }
-      if (state.live.composer.draftText && !state.composeMode) {
-        items.push('<div class="summary-card"><div class="list-label">공유 draft</div><pre>' + esc(state.live.composer.draftText) + '</pre></div>');
+        items.push('<div class="summary-card"><div class="list-label">다음 단계</div><strong>' + esc(state.live.plan.summary || '작업 단계') + '</strong><div class="mini-list">' + state.live.plan.items.slice(0, 3).map(function(item) { return '<div class="muted">[' + esc(item.status || '-') + '] ' + esc(item.label || item.detail || '-') + '</div>'; }).join('') + '</div></div>');
       }
       if (!items.length) {
         return '';
@@ -2058,14 +2056,40 @@ function renderThreadPanelHtml(nonce: string): string {
       return '<section class="summary-strip">' + items.join('') + '</section>';
     }
 
+    function renderUtilityPanel() {
+      const tab = pickUtilityTab(activeUtilityTab);
+      activeUtilityTab = tab;
+      const tabs = [
+        { id: 'review', label: '검토' },
+        { id: 'run', label: '실행' },
+        { id: 'workspace', label: '파일' },
+      ];
+      return [
+        '<div class="section-head"><div><div class="title">보조 패널</div><div class="muted">채팅에서 벗어나는 정보는 여기서만 펼칩니다.</div></div></div>',
+        '<div class="utility-tabs">' + tabs.map(function(item) {
+          return '<button class="utility-tab ' + (item.id === tab ? 'active' : '') + '" data-action="select-utility-tab" data-tab="' + attr(item.id) + '">' + esc(item.label) + '</button>';
+        }).join('') + '</div>',
+        '<div class="utility-body">' + renderUtilityTabContent(tab) + '</div>',
+      ].join('');
+    }
+
+    function renderUtilityTabContent(tab) {
+      if (tab === 'run') {
+        return renderTerminal();
+      }
+      if (tab === 'workspace') {
+        return renderWorkspace();
+      }
+      return renderReview();
+    }
+
     function renderReview() {
       const items = [
         '<div class="row">',
-          '  <span class="pill">작업 ' + esc(state.currentJobId || '-') + '</span>',
           '  <span class="pill">패치 ' + esc(state.derived.patchSummary || state.operation.patchSummary || '-') + '</span>',
           (state.derived.patchResultStatus || state.derived.patchResultMessage ? '<span class="pill ' + (String(state.derived.patchResultStatus || '').toLowerCase() === 'failed' ? 'bad' : 'ok') + '">적용 ' + esc(state.derived.patchResultStatus || '-') + '</span>' : ''),
         '</div>',
-        '<div class="row"><button data-action="apply-patch"' + (state.currentJobId && state.derived.patchFiles.length ? '' : ' disabled') + '>패치 적용</button><button class="secondary" data-action="run-profile"' + (state.currentJobId && selectedRunProfileId ? '' : ' disabled') + '>실행</button></div>',
+        '<div class="row"><button data-action="apply-patch"' + (state.currentJobId && state.derived.patchFiles.length ? '' : ' disabled') + '>패치 적용</button></div>',
       ];
       if (state.derived.patchResultMessage) {
         items.push('<div class="muted">' + esc(state.derived.patchResultMessage) + '</div>');
@@ -2087,6 +2111,7 @@ function renderThreadPanelHtml(nonce: string): string {
       const output = state.live.terminal.output || state.live.terminal.excerpt || state.derived.runOutput || state.derived.runExcerpt || '';
       const changedFiles = state.live.workspace.changedFiles.length ? state.live.workspace.changedFiles : state.derived.currentJobFiles;
       const items = [
+        '<div class="row"><select id="run-profile-select">' + renderRunProfiles() + '</select><button class="secondary" data-action="run-profile"' + (state.currentJobId && selectedRunProfileId ? '' : ' disabled') + '>실행</button></div>',
         '<div class="row">',
         '  <span class="pill ' + (String(status).toLowerCase() === 'passed' ? 'ok' : (String(status).toLowerCase() === 'failed' ? 'bad' : '')) + '">상태 ' + esc(status) + '</span>',
         (state.live.terminal.profileId || state.derived.runProfileId ? '<span class="pill">프로파일 ' + esc(state.live.terminal.profileId || state.derived.runProfileId) + '</span>' : ''),
@@ -2145,23 +2170,98 @@ function renderThreadPanelHtml(nonce: string): string {
     }
 
     function renderTimeline() {
-      if (!state.events.length) {
+      const events = state.events.filter(function(item) { return shouldShowPrimaryEvent(item); });
+      if (!events.length) {
         return '<div class="empty">아직 대화와 작업 로그가 없습니다.</div>';
       }
-      return '<div class="timeline">' + state.events.map(function(item) {
+      return '<div class="timeline">' + events.map(function(item) {
         const role = normalizedRole(item);
-        const kindLabel = describeKind(item.kind);
-        const content = item.body || item.title || kindLabel;
-        const showTitle = Boolean(item.title && item.body && item.title !== item.body);
+        const headline = eventHeadline(item, role);
+        const content = eventBody(item, headline);
         const chips = [];
-        if (item.kind) {
-          chips.push('<span class="badge ' + badgeTone(item.kind) + '">' + esc(kindLabel) + '</span>');
+        if (item.data && item.data.status) {
+          chips.push('<span class="badge ' + badgeTone(item.data.status) + '">' + esc(String(item.data.status)) + '</span>');
         }
-        if (item.jobId) {
-          chips.push('<span class="badge">작업 ' + esc(item.jobId) + '</span>');
-        }
-        return '<article class="message ' + role + '"><div class="message-meta"><div class="message-author"><span class="avatar">' + esc(roleGlyph(role)) + '</span><div><div class="message-label">' + esc(roleLabel(role)) + '</div><div class="message-sub">' + esc(fmt(item.at, true)) + '</div></div></div><div class="message-chips">' + chips.join('') + '</div></div>' + (showTitle ? '<div class="message-title">' + esc(item.title) + '</div>' : '') + '<div class="message-body">' + nl2br(content) + '</div></article>';
+        return '<article class="message ' + role + '"><div class="message-meta"><div class="message-author"><span class="avatar">' + esc(roleGlyph(role)) + '</span><div><div class="message-label">' + esc(roleLabel(role)) + '</div><div class="message-sub">' + esc(fmt(item.at, true)) + '</div></div></div><div class="message-chips">' + chips.join('') + '</div></div>' + (headline ? '<div class="message-title">' + esc(headline) + '</div>' : '') + (content ? '<div class="message-body">' + nl2br(content) + '</div>' : '') + '</article>';
       }).join('') + '</div>';
+    }
+
+    function compactThreadPreview(thread) {
+      const preview = String(thread.lastEventText || state.live.activity.summary || '').trim();
+      if (preview) {
+        return preview;
+      }
+      return '아직 기록이 없습니다.';
+    }
+
+    function pickUtilityTab(current) {
+      const normalized = String(current || '').toLowerCase();
+      if (normalized === 'review' || normalized === 'run' || normalized === 'workspace') {
+        return normalized;
+      }
+      if (state.derived.patchFiles.length || state.derived.patchResultStatus || state.derived.patchResultMessage) {
+        return 'review';
+      }
+      if (state.derived.runStatus || state.live.terminal.status || state.derived.runOutput || state.derived.runErrors.length) {
+        return 'run';
+      }
+      return 'workspace';
+    }
+
+    function shouldShowPrimaryEvent(item) {
+      const kind = String(item.kind || '').toLowerCase();
+      return ![
+        'prompt_accepted',
+        'tool_activity',
+        'patch_apply',
+        'run_profile',
+        'session_event',
+        'live_state',
+        'status',
+        'reasoning',
+        'plan',
+      ].includes(kind);
+    }
+
+    function eventHeadline(item, role) {
+      const kind = String(item.kind || '').toLowerCase();
+      if (role === 'user') {
+        return '';
+      }
+      if (role === 'assistant' && ['assistant_message', 'assistant_response', 'provider_message', 'user_prompt', 'prompt_submit', 'prompt_submitted'].includes(kind)) {
+        return '';
+      }
+      if (kind === 'patch_ready') {
+        return '변경 제안';
+      }
+      if (kind === 'patch_applied' || kind === 'patch_result') {
+        return '패치 적용 결과';
+      }
+      if (kind === 'run_finished' || kind === 'run_result') {
+        return '실행 결과';
+      }
+      if (kind === 'error') {
+        return '오류';
+      }
+      return item.title || describeKind(item.kind);
+    }
+
+    function eventBody(item, headline) {
+      const kind = String(item.kind || '').toLowerCase();
+      if (kind === 'patch_ready') {
+        return text(item.data.summary) || item.body || '';
+      }
+      if (kind === 'patch_applied' || kind === 'patch_result') {
+        return item.body || text(item.data.message) || '';
+      }
+      if (kind === 'run_finished' || kind === 'run_result') {
+        return text(item.data.summary) || item.body || text(item.data.excerpt) || '';
+      }
+      const raw = item.body || '';
+      if (raw && raw !== headline) {
+        return raw;
+      }
+      return '';
     }
 
     function normalizedRole(item) {

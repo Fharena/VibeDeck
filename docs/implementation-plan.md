@@ -253,6 +253,11 @@
   - extension local agent가 bridge 재시작 뒤 기존 8080 agent를 그대로 재사용하지 않고, 먼저 종료한 뒤 새 bridge 기준으로 다시 시작하도록 정리
   - agent에 `/v1/agent/runtime/shutdown` 엔드포인트를 추가해 extension이 안전하게 종료를 요청할 수 있게 하고, 종료 실패 시에는 포트 점유 프로세스 정리 경로로 폴백
   - 검증: `go test ./internal/agent -run "TestHTTPServerRuntime(Adapter|Shutdown)|TestHTTPServerBootstrapEndpoint"` 통과, `npm --prefix extensions/vibedeck-bridge run build` 통과, `npm --prefix extensions/vibedeck-bridge run smoke:bootstrap` 통과
+- 2026-03-26 / 채팅 우선 UX 정리
+  - extension shared threads를 `항상 보이는 우측 정보 레일` 대신 `대화 + 토글형 보조 패널(검토/실행/파일)` 구조로 줄이고, 세션 헤더/목록/배너에서 저신호 상태 로그를 기본 숨김으로 정리
+  - extension 타임라인은 사용자/에이전트 대화와 패치/실행 결과만 기본 피드에 남기고, `prompt_accepted`, `tool_activity`, `live_state`, `patch_apply`, `run_profile` 같은 운영성 이벤트는 기본 숨김으로 조정
+  - 모바일은 `현재 작업` 카드에서 도구 활동/최근 오류를 기본 표면에서 빼고, `작업 로그`를 `대화와 결과` 피드로 바꿔 요청/응답/검토 결과만 남기도록 정리
+  - 검증: `npm --prefix extensions/vibedeck-bridge run build` 통과, `npm --prefix extensions/vibedeck-bridge run smoke:panel` 통과, 변경 파일 대상 `flutter analyze` 통과, 안전 경로 `flutter_safe.ps1 test test/app_smoke_test.dart` 통과
 
 ## 다음 작업 우선순위
 
