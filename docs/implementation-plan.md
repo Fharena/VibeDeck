@@ -256,6 +256,7 @@
 - 2026-03-26 / 채팅 우선 UX 정리
   - extension shared threads를 `메인 채팅 + 세션 드로어` 구조로 다시 잘라 Cursor 채팅창처럼 기본 화면에는 대화와 composer만 남기도록 정리
   - 우측 보조 패널은 제거하고, 패치/실행/파일 상태는 채팅 안의 인라인 변경 카드와 결과 카드로 흡수
+  - `공유 세션`은 사이드바 기본 표면으로 두되, 상단 액션과 명령 팔레트에서 에디터 탭으로 분리해 열 수 있는 경로를 추가
   - extension 타임라인은 사용자/에이전트 대화와 패치/실행 결과만 기본 피드에 남기고, `prompt_accepted`, `tool_activity`, `live_state`, `patch_apply`, `run_profile` 같은 운영성 이벤트는 기본 숨김으로 조정
   - 모바일은 `현재 작업` 카드에서 도구 활동/최근 오류를 기본 표면에서 빼고, `작업 로그`를 `대화와 결과` 피드로 바꿔 요청/응답/검토 결과만 남기도록 정리
   - 검증: `npm --prefix extensions/vibedeck-bridge run build` 통과, `npm --prefix extensions/vibedeck-bridge run smoke:panel` 통과, 변경 파일 대상 `flutter analyze` 통과, 안전 경로 `flutter_safe.ps1 test test/app_smoke_test.dart` 통과

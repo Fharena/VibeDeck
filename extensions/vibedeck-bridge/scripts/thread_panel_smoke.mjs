@@ -417,6 +417,7 @@ try {
   assert.match(fakeView.webview.html, /새 세션/);
   assert.match(fakeView.webview.html, /메시지/);
   assert.match(fakeView.webview.html, /변경 반영/);
+  assert.match(fakeView.webview.html, /탭으로 열기|사이드바로/);
   assert.equal(fakeView.webview.options.enableScripts, true);
   const embeddedScript = fakeView.webview.html.match(/<script nonce="[^"]*">([\s\S]*)<\/script>/)?.[1] ?? "";
   assert.ok(embeddedScript, "thread panel html should include inline webview script");
