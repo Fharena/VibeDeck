@@ -206,7 +206,7 @@ class AppController extends ChangeNotifier {
 
   String get liveDraftPreview => liveSession.composer.draftText;
   bool get liveComposerTyping => liveSession.composer.isTyping;
-  bool get hasSessionSyncTarget => currentThreadId.isNotEmpty;
+  bool get hasSessionSyncTarget => currentSharedSessionId.isNotEmpty;
   bool get canRetrySessionSync => hasSessionSyncTarget && !isLoading;
   bool get canRefreshSessionSync => hasSessionSyncTarget && !isLoading;
   String get workspaceRootPath {
@@ -227,6 +227,9 @@ class AppController extends ChangeNotifier {
     final selected = selectedThreadSummary?.sessionId.trim() ?? '';
     if (selected.isNotEmpty) {
       return selected;
+    }
+    if (sessionId.trim().isNotEmpty) {
+      return sessionId.trim();
     }
     return currentThreadId.trim();
   }
@@ -388,8 +391,9 @@ class AppController extends ChangeNotifier {
     final agent = uri.queryParameters['agent']?.trim() ?? '';
     final signaling = uri.queryParameters['signaling']?.trim() ?? '';
     final thread = uri.queryParameters['thread']?.trim() ?? '';
+    final session = uri.queryParameters['session']?.trim() ?? '';
 
-    if (agent.isEmpty && signaling.isEmpty && thread.isEmpty) {
+    if (agent.isEmpty && signaling.isEmpty && thread.isEmpty && session.isEmpty) {
       return;
     }
 
@@ -401,6 +405,9 @@ class AppController extends ChangeNotifier {
     }
     if (thread.isNotEmpty) {
       currentThreadId = thread;
+    }
+    if (session.isNotEmpty) {
+      sessionId = session;
     }
 
     _rememberCurrentHost();
@@ -426,6 +433,7 @@ class AppController extends ChangeNotifier {
 
   void beginNewThread() {
     currentThreadId = '';
+    sessionId = '';
     currentJobId = null;
     promptDraft = '';
     patchSummary = '';
@@ -451,6 +459,7 @@ class AppController extends ChangeNotifier {
 
   Future<void> selectThread(String threadId) {
     currentThreadId = threadId.trim();
+    sessionId = '';
     _patchFiles.clear();
     _sessionSyncLogs.clear();
     _clearWorkspaceBrowserState();
@@ -837,16 +846,16 @@ class AppController extends ChangeNotifier {
     if (bootstrap.signalingBaseUrl.isNotEmpty) {
       signalingBaseUrl = bootstrap.signalingBaseUrl;
     }
-    final bootstrapSelectionId = bootstrap.currentThreadId.isNotEmpty
-        ? bootstrap.currentThreadId
-        : bootstrap.currentSessionId;
-    if (currentThreadId.isEmpty && bootstrapSelectionId.isNotEmpty) {
-      currentThreadId = bootstrapSelectionId;
+    if (sessionId.isEmpty && bootstrap.currentSessionId.isNotEmpty) {
+      sessionId = bootstrap.currentSessionId;
+    }
+    if (currentThreadId.isEmpty && bootstrap.currentThreadId.isNotEmpty) {
+      currentThreadId = bootstrap.currentThreadId;
     }
   }
 
   Future<void> _refreshThreadDetail() async {
-    if (currentThreadId.isEmpty) {
+    if (currentSharedSessionId.isEmpty) {
       currentJobId = null;
       _threadEvents.clear();
       liveSession = const SessionLiveView();
@@ -889,6 +898,9 @@ class AppController extends ChangeNotifier {
     currentThreadId = detail['thread'] is Map
         ? (detail['thread']['id']?.toString() ?? currentThreadId)
         : currentThreadId;
+    sessionId = detail['thread'] is Map
+        ? (detail['thread']['sessionId']?.toString() ?? sessionId)
+        : sessionId;
     _markSessionSyncHealthy(shouldNotify: false);
     _threadEvents
       ..clear()

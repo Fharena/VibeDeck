@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import http from "node:http";
+import vm from "node:vm";
 import { createBridgeExtensionController } from "../dist/bridgeExtensionController.js";
 
 const streamClients = new Map();
@@ -92,7 +93,7 @@ const server = http.createServer(async (req, res) => {
         thread: {
           id: threadId,
           title: prompt.split("\n")[0] || "새 스레드",
-          sessionId: body.sid,
+          sessionId: threadId,
           state: "patch_ready",
           currentJobId: jobId,
           lastEventKind: "patch_ready",
@@ -159,7 +160,7 @@ const server = http.createServer(async (req, res) => {
         ],
       };
       state.threads = [detail.thread];
-      state.details.set(detail.thread.sessionId, detail);
+      state.details.set(detail.thread.id, detail);
       return json(res, 200, {
         responses: [
           { type: "PROMPT_ACK", payload: { threadId, jobId } },
@@ -252,12 +253,14 @@ const commandRegistry = new Map();
 const panelMessages = [];
 const activeEditorListeners = [];
 const selectionListeners = [];
+const viewProviders = new Map();
 let panelMessageHandler = null;
 
 const fakePanel = {
   title: "",
   webview: {
     html: "",
+    options: {},
     onDidReceiveMessage(listener) {
       panelMessageHandler = listener;
       return { dispose() {} };
@@ -274,9 +277,38 @@ const fakePanel = {
   dispose() {},
 };
 
+const fakeView = {
+  title: "공유 세션",
+  description: "",
+  visible: true,
+  show() {},
+  webview: {
+    html: "",
+    options: {},
+    onDidReceiveMessage(listener) {
+      panelMessageHandler = listener;
+      return { dispose() {} };
+    },
+    async postMessage(message) {
+      panelMessages.push(message);
+      return true;
+    },
+  },
+};
+
 const fakeVscode = {
   commands: {
     async executeCommand(command, ...args) {
+      if (command === "workbench.view.extension.vibedeckBridge") {
+        const provider = viewProviders.get("vibedeckBridge.sharedThreads");
+        if (provider) {
+          await provider.resolveWebviewView(fakeView);
+        }
+        return undefined;
+      }
+      if (command === "vibedeckBridge.sharedThreads.focus") {
+        return undefined;
+      }
       return await commandRegistry.get(command)(...args);
     },
     registerCommand(command, callback) {
@@ -329,6 +361,14 @@ const fakeVscode = {
     createStatusBarItem() {
       return { text: "", tooltip: undefined, command: undefined, show() {}, dispose() {} };
     },
+    registerWebviewViewProvider(viewId, provider) {
+      viewProviders.set(viewId, provider);
+      return {
+        dispose() {
+          viewProviders.delete(viewId);
+        },
+      };
+    },
     createWebviewPanel() {
       return fakePanel;
     },
@@ -373,9 +413,14 @@ try {
   await fakeVscode.commands.executeCommand("vibedeckBridge.openThreadPanel");
   await tick();
 
-  assert.match(fakePanel.webview.html, /VibeDeck 세션/);
-  assert.match(fakePanel.webview.html, /대화/);
-  assert.match(fakePanel.webview.html, /파일과 포커스/);
+  assert.match(fakeView.webview.html, /VibeDeck 세션/);
+  assert.match(fakeView.webview.html, /대화/);
+  assert.match(fakeView.webview.html, /파일과 포커스/);
+  assert.equal(fakeView.webview.options.enableScripts, true);
+  const embeddedScript = fakeView.webview.html.match(/<script nonce="[^"]*">([\s\S]*)<\/script>/)?.[1] ?? "";
+  assert.ok(embeddedScript, "thread panel html should include inline webview script");
+  assert.doesNotThrow(() => new vm.Script(embeddedScript), "thread panel inline script should parse");
+  await waitFor(() => panelMessages.length > 0);
   assert.ok(panelMessages.length > 0, "panel should receive initial state");
 
   await panelMessageHandler({
@@ -455,6 +500,12 @@ try {
   for (const disposable of [...context.subscriptions].reverse()) {
     disposable.dispose();
   }
+  for (const res of streamClients.keys()) {
+    res.destroy();
+  }
+  streamClients.clear();
+  await tick();
+  await tick();
   await new Promise((resolve) => server.close(resolve));
 }
 

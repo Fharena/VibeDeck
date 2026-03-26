@@ -97,9 +97,13 @@ export class CursorExtensionBridge implements WorkspaceAdapter {
     const shouldReadLatestTerminalError = input.options.includeLatestError;
 
     const [activeEditor, workspaceMetadata, changedFiles, latestTerminalError] = await Promise.all([
-      shouldReadActiveEditor ? this.host.getActiveEditor() : Promise.resolve(null),
+      shouldReadActiveEditor
+        ? this.host.getActiveEditor().catch(() => null)
+        : Promise.resolve(null),
       shouldReadWorkspaceMetadata ? this.readWorkspaceMetadata() : Promise.resolve<CursorWorkspaceMetadata>({}),
-      shouldReadChangedFiles ? this.host.getChangedFiles() : Promise.resolve([]),
+      shouldReadChangedFiles
+        ? this.host.getChangedFiles().catch(() => [])
+        : Promise.resolve([]),
       shouldReadLatestTerminalError ? this.readLatestTerminalError() : Promise.resolve(undefined),
     ]);
 

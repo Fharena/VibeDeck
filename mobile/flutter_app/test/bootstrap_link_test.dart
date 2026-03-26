@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vibedeck_mobile/app.dart';
 import 'package:vibedeck_mobile/services/agent_api.dart';
@@ -11,11 +12,10 @@ void main() {
     final controller = AppController(api: _FakeBootstrapLinkAgentApi());
     final linkSource = FakeBootstrapLinkSource(
       initialUri: Uri.parse(
-        'vibedeck://bootstrap?agent=http%3A%2F%2F192.168.0.24%3A8080&signaling=http%3A%2F%2F192.168.0.24%3A8081&thread=thread-link-1',
+        'vibedeck://bootstrap?agent=http%3A%2F%2F192.168.0.24%3A8080&signaling=http%3A%2F%2F192.168.0.24%3A8081&thread=thread-link-1&session=sid-link-1',
       ),
     );
 
-    addTearDown(controller.dispose);
     addTearDown(linkSource.dispose);
 
     await tester.pumpWidget(
@@ -24,12 +24,18 @@ void main() {
         bootstrapLinkSource: linkSource,
       ),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
 
     expect(controller.agentBaseUrl, 'http://192.168.0.24:8080');
     expect(controller.signalingBaseUrl, 'http://192.168.0.24:8081');
     expect(controller.currentThreadId, 'thread-link-1');
+    expect(controller.currentSharedSessionId, 'sid-link-1');
     expect(controller.recentHosts, isNotEmpty);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    controller.dispose();
+    await tester.pump();
   });
 
   testWidgets('applies incoming bootstrap deep link while app is open', (
@@ -38,7 +44,6 @@ void main() {
     final controller = AppController(api: _FakeBootstrapLinkAgentApi());
     final linkSource = FakeBootstrapLinkSource();
 
-    addTearDown(controller.dispose);
     addTearDown(linkSource.dispose);
 
     await tester.pumpWidget(
@@ -47,18 +52,25 @@ void main() {
         bootstrapLinkSource: linkSource,
       ),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
 
     linkSource.push(
       Uri.parse(
-        'vibedeck://bootstrap?agent=http%3A%2F%2F10.0.0.55%3A8080&signaling=http%3A%2F%2F10.0.0.55%3A8081&thread=thread-link-2',
+        'vibedeck://bootstrap?agent=http%3A%2F%2F10.0.0.55%3A8080&signaling=http%3A%2F%2F10.0.0.55%3A8081&thread=thread-link-2&session=sid-link-2',
       ),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
 
     expect(controller.agentBaseUrl, 'http://10.0.0.55:8080');
     expect(controller.signalingBaseUrl, 'http://10.0.0.55:8081');
     expect(controller.currentThreadId, 'thread-link-2');
+    expect(controller.currentSharedSessionId, 'sid-link-2');
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    controller.dispose();
+    await tester.pump();
   });
 }
 
@@ -96,6 +108,7 @@ class _FakeBootstrapLinkAgentApi extends AgentApi {
       'signalingBaseUrl': resolvedSignaling,
       'workspaceRoot': 'C:/demo/workspace',
       'currentThreadId': 'thread-link-1',
+      'currentSessionId': 'sid-link-1',
       'adapter': {
         'name': 'cursor-agent-cli',
         'mode': 'cursor_agent_cli',
@@ -175,13 +188,13 @@ class _FakeBootstrapLinkAgentApi extends AgentApi {
   }
 
   @override
-  Future<Map<String, dynamic>> threads(String baseUrl) async {
+  Future<Map<String, dynamic>> sessions(String baseUrl) async {
     return {
       'threads': [
         {
           'id': baseUrl.contains('10.0.0.55') ? 'thread-link-2' : 'thread-link-1',
           'title': 'link thread',
-          'sessionId': 'sid-link',
+          'sessionId': baseUrl.contains('10.0.0.55') ? 'sid-link-2' : 'sid-link-1',
           'state': 'draft',
           'currentJobId': '',
           'lastEventKind': '',
@@ -193,12 +206,88 @@ class _FakeBootstrapLinkAgentApi extends AgentApi {
   }
 
   @override
+  Future<Map<String, dynamic>> threads(String baseUrl) async {
+    return {
+      'threads': [
+        {
+          'id': baseUrl.contains('10.0.0.55') ? 'thread-link-2' : 'thread-link-1',
+          'title': 'link thread',
+          'sessionId': baseUrl.contains('10.0.0.55') ? 'sid-link-2' : 'sid-link-1',
+          'state': 'draft',
+          'currentJobId': '',
+          'lastEventKind': '',
+          'lastEventText': '',
+          'updatedAt': DateTime(2026, 3, 8, 21, 15).millisecondsSinceEpoch,
+        },
+      ],
+    };
+  }
+
+  @override
+  Future<Map<String, dynamic>> sessionDetail(String baseUrl, String sessionId) async {
+    final threadId = baseUrl.contains('10.0.0.55') ? 'thread-link-2' : 'thread-link-1';
+    final resolvedSessionId = baseUrl.contains('10.0.0.55') ? 'sid-link-2' : 'sid-link-1';
+    return {
+      'thread': {
+        'id': threadId,
+        'title': 'link thread',
+        'sessionId': resolvedSessionId,
+        'state': 'draft',
+        'currentJobId': '',
+        'lastEventKind': '',
+        'lastEventText': '',
+        'updatedAt': DateTime(2026, 3, 8, 21, 15).millisecondsSinceEpoch,
+      },
+      'events': const [],
+      'liveState': const <String, dynamic>{},
+      'operationState': const <String, dynamic>{},
+    };
+  }
+
+  @override
+  Stream<Map<String, dynamic>> sessionStream(String baseUrl, String sessionId) {
+    return const Stream<Map<String, dynamic>>.empty();
+  }
+
+  @override
+  Future<Map<String, dynamic>> updateSessionLiveState(
+    String baseUrl,
+    String sessionId,
+    Map<String, dynamic> update,
+  ) async {
+    final threadId = sessionId == 'sid-link-2' ? 'thread-link-2' : 'thread-link-1';
+    return {
+      'thread': {
+        'id': threadId,
+        'title': 'link thread',
+        'sessionId': sessionId,
+        'state': 'draft',
+        'currentJobId': '',
+        'lastEventKind': '',
+        'lastEventText': '',
+        'updatedAt': DateTime(2026, 3, 8, 21, 15).millisecondsSinceEpoch,
+      },
+      'events': const [],
+      'liveState': {
+        'participant': {
+          'participantId': 'mobile-test',
+          'clientType': 'mobile',
+          'displayName': 'VibeDeck Mobile',
+          'active': true,
+          'lastSeenAt': DateTime(2026, 3, 8, 21, 15).millisecondsSinceEpoch,
+        },
+      },
+      'operationState': const <String, dynamic>{},
+    };
+  }
+
+  @override
   Future<Map<String, dynamic>> threadDetail(String baseUrl, String threadId) async {
     return {
       'thread': {
         'id': threadId,
         'title': 'link thread',
-        'sessionId': 'sid-link',
+        'sessionId': threadId == 'thread-link-2' ? 'sid-link-2' : 'sid-link-1',
         'state': 'draft',
         'currentJobId': '',
         'lastEventKind': '',

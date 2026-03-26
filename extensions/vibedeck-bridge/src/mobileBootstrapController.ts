@@ -57,10 +57,13 @@ export interface MobileBootstrapControllerDependencies {
   api?: AgentPanelApi;
   resolveLanHost?: (configuredHost: string) => string | undefined;
   renderQRCodeSvg?: (value: string) => Promise<string>;
+  ensureAgentReady?: () => Promise<void>;
 }
 
 interface MobileBootstrapSettings {
   agentBaseUrl: string;
+  agentHost: string;
+  agentPort: number;
   signalingBaseUrl: string;
   hostOverride: string;
   scheme: string;
@@ -73,6 +76,7 @@ interface MobileBootstrapViewState {
   publicSignalingBaseUrl: string;
   workspaceRoot: string;
   currentThreadId: string;
+  currentSessionId: string;
   provider: string;
   hostSource: string;
   warning: string;
@@ -94,6 +98,7 @@ export function buildMobileBootstrapLink(input: {
   agentBaseUrl: string;
   signalingBaseUrl: string;
   threadId: string;
+  sessionId?: string;
 }): string {
   const scheme = input.scheme.trim() || "vibedeck";
   const url = new URL(`${scheme}://bootstrap`);
@@ -105,6 +110,9 @@ export function buildMobileBootstrapLink(input: {
   }
   if (input.threadId.trim()) {
     url.searchParams.set("thread", input.threadId.trim());
+  }
+  if ((input.sessionId ?? "").trim()) {
+    url.searchParams.set("session", (input.sessionId ?? "").trim());
   }
   return url.toString();
 }
@@ -152,6 +160,7 @@ class DefaultMobileBootstrapController implements MobileBootstrapController {
   private readonly api: AgentPanelApi;
   private readonly resolveLanHost: (configuredHost: string) => string | undefined;
   private readonly renderQRCodeSvg: (value: string) => Promise<string>;
+  private readonly ensureAgentReady: () => Promise<void>;
   private panel: ThreadPanelWebviewPanelLike | undefined;
 
   constructor(
@@ -173,6 +182,7 @@ class DefaultMobileBootstrapController implements MobileBootstrapController {
             light: "#ffffff",
           },
         }));
+    this.ensureAgentReady = dependencies.ensureAgentReady ?? (async () => undefined);
   }
 
   async openOrReveal(): Promise<void> {
@@ -213,7 +223,7 @@ class DefaultMobileBootstrapController implements MobileBootstrapController {
         `Copied mobile bootstrap link: ${state.bootstrapLink}`,
       );
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = describeBootstrapError(error);
       void this.vscode.window.showErrorMessage(`VibeDeck mobile bootstrap failed: ${message}`);
     }
   }
@@ -246,7 +256,7 @@ class DefaultMobileBootstrapController implements MobileBootstrapController {
       const state = await this.buildState();
       await panel.webview.postMessage({ type: "state", state });
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = describeBootstrapError(error);
       await panel.webview.postMessage({
         type: "state",
         state: {
@@ -256,6 +266,7 @@ class DefaultMobileBootstrapController implements MobileBootstrapController {
           publicSignalingBaseUrl: "",
           workspaceRoot: "",
           currentThreadId: "",
+          currentSessionId: "",
           provider: "",
           hostSource: "",
           warning: message,
@@ -266,6 +277,7 @@ class DefaultMobileBootstrapController implements MobileBootstrapController {
   }
 
   private async buildState(): Promise<MobileBootstrapViewState> {
+    await this.ensureAgentReady();
     const settings = this.readSettings();
     const bootstrap = await this.api.bootstrap(settings.agentBaseUrl);
 
@@ -282,15 +294,17 @@ class DefaultMobileBootstrapController implements MobileBootstrapController {
       bootstrap.signalingBaseUrl || settings.signalingBaseUrl,
       effectiveHost,
     );
+    const currentSessionId = bootstrap.currentSessionId || "";
     const currentThreadId = bootstrap.currentThreadId || bootstrap.currentSessionId;
     const bootstrapLink = buildMobileBootstrapLink({
       scheme: settings.scheme,
       agentBaseUrl: publicAgentBaseUrl,
       signalingBaseUrl: publicSignalingBaseUrl,
       threadId: currentThreadId,
+      sessionId: currentSessionId,
     });
 
-    const warning = buildWarning(effectiveHost, publicAgentBaseUrl);
+    const warning = buildWarning(settings, effectiveHost, publicAgentBaseUrl);
     return {
       bootstrapLink,
       qrSvg: await this.renderQRCodeSvg(bootstrapLink),
@@ -298,6 +312,7 @@ class DefaultMobileBootstrapController implements MobileBootstrapController {
       publicSignalingBaseUrl,
       workspaceRoot: bootstrap.workspaceRoot,
       currentThreadId,
+      currentSessionId,
       provider: bootstrap.adapter.provider,
       hostSource: settings.hostOverride ? "manual" : effectiveHost,
       warning,
@@ -315,6 +330,8 @@ class DefaultMobileBootstrapController implements MobileBootstrapController {
     const scheme = text(config.get<string>("mobileBootstrap.scheme", "vibedeck")).trim() || "vibedeck";
     return {
       agentBaseUrl: configuredAgentBaseUrl || normalizeAgentBaseUrl(agentHost, agentPort),
+      agentHost,
+      agentPort,
       signalingBaseUrl,
       hostOverride: text(config.get<string>("mobileBootstrap.hostOverride", "")).trim(),
       scheme,
@@ -367,7 +384,14 @@ function rankHost(host: string): number {
   return 3;
 }
 
-function buildWarning(host: string, publicAgentBaseUrl: string): string {
+function buildWarning(
+  settings: MobileBootstrapSettings,
+  host: string,
+  publicAgentBaseUrl: string,
+): string {
+  if (isLoopbackHost(settings.agentHost)) {
+    return `현재 local agent가 ${settings.agentHost}:${settings.agentPort} loopback에만 바인딩돼 있어 휴대폰이 직접 붙지 못합니다. Cursor 설정에서 vibedeckBridge.agent.host를 0.0.0.0으로 바꾸고 VibeDeck: Restart Local Agent를 실행하세요. signaling 서버도 별도로 실행해야 합니다.`;
+  }
   if (isLoopbackHost(host)) {
     return "LAN 주소를 찾지 못해 localhost 기반 링크를 만들었습니다. 휴대폰에서는 직접 연결되지 않을 수 있습니다.";
   }
@@ -375,6 +399,17 @@ function buildWarning(host: string, publicAgentBaseUrl: string): string {
     return "bootstrap 링크에 localhost가 남아 있습니다. vibedeckBridge.mobileBootstrap.hostOverride 설정을 확인하세요.";
   }
   return "";
+}
+
+function describeBootstrapError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  if (message.includes("ECONNREFUSED") || message.includes("connect ECONNREFUSED")) {
+    return "로컬 agent에 연결하지 못했습니다. 먼저 VibeDeck: Restart Local Agent를 실행해 보세요. 실기기 연결이라면 vibedeckBridge.agent.host를 0.0.0.0으로 바꾸고 다시 시도해야 합니다.";
+  }
+  if (message.includes("ETIMEDOUT") || message.includes("timed out")) {
+    return "로컬 agent 응답이 시간 안에 오지 않았습니다. agent 상태와 signaling 실행 여부를 다시 확인하세요.";
+  }
+  return message;
 }
 
 function renderMobileBootstrapHtml(nonce: string): string {
@@ -418,6 +453,7 @@ function renderMobileBootstrapHtml(nonce: string): string {
       publicSignalingBaseUrl: '',
       workspaceRoot: '',
       currentThreadId: '',
+      currentSessionId: '',
       provider: '',
       hostSource: '',
       warning: '',
@@ -465,6 +501,7 @@ function renderMobileBootstrapHtml(nonce: string): string {
         '    <div class="muted">agent</div><div class="value">' + esc(state.publicAgentBaseUrl || '-') + '</div>',
         '    <div class="muted">signaling</div><div class="value">' + esc(state.publicSignalingBaseUrl || '-') + '</div>',
         '    <div class="muted">thread</div><div class="value">' + esc(state.currentThreadId || '-') + '</div>',
+        '    <div class="muted">session</div><div class="value">' + esc(state.currentSessionId || '-') + '</div>',
         '    <div class="muted">workspace</div><div class="value">' + esc(state.workspaceRoot || '-') + '</div>',
         '    <div class="muted">deep link</div><div class="value">' + esc(state.bootstrapLink || '-') + '</div>',
         '  </div>',

@@ -24,8 +24,23 @@ export interface ThreadPanelWorkspaceLike {
 
 export interface ThreadPanelWebviewLike {
   html: string;
+  options?: {
+    enableScripts?: boolean;
+    retainContextWhenHidden?: boolean;
+  };
   onDidReceiveMessage(listener: (message: unknown) => unknown): DisposableLike;
   postMessage(message: unknown): Promise<boolean> | Thenable<boolean>;
+}
+
+export interface ThreadPanelWebviewViewLike {
+  webview: ThreadPanelWebviewLike;
+  title?: string;
+  description?: string;
+  show?(preserveFocus?: boolean): void;
+}
+
+export interface ThreadPanelWebviewViewProviderLike {
+  resolveWebviewView(view: ThreadPanelWebviewViewLike): unknown;
 }
 
 export interface ThreadPanelWebviewPanelLike extends DisposableLike {
@@ -39,6 +54,10 @@ export interface ThreadPanelWindowLike {
   activeTextEditor?: unknown;
   onDidChangeActiveTextEditor?(listener: (editor: unknown) => unknown): DisposableLike;
   onDidChangeTextEditorSelection?(listener: (event: unknown) => unknown): DisposableLike;
+  registerWebviewViewProvider?(
+    viewId: string,
+    provider: ThreadPanelWebviewViewProviderLike,
+  ): DisposableLike;
   createWebviewPanel(
     viewType: string,
     title: string,
@@ -51,6 +70,9 @@ export interface ThreadPanelWindowLike {
 }
 
 export interface ThreadPanelVscodeLike {
+  commands?: {
+    executeCommand<T = unknown>(command: string, ...args: unknown[]): Promise<T>;
+  };
   window: ThreadPanelWindowLike;
   workspace: ThreadPanelWorkspaceLike;
   viewColumn: {
@@ -143,17 +165,26 @@ export function createThreadPanelController(
 }
 
 class DefaultThreadPanelController implements ThreadPanelController {
+  private static readonly sidebarContainerId = "vibedeckBridge";
+
+  private static readonly sidebarViewId = "vibedeckBridge.sharedThreads";
+
   private readonly vscode: ThreadPanelVscodeLike;
   private readonly api: AgentPanelApi;
   private panel: ThreadPanelWebviewPanelLike | undefined;
+  private view: ThreadPanelWebviewViewLike | undefined;
+  private readonly viewRegistration: DisposableLike | undefined;
   private refreshTimer: NodeJS.Timeout | undefined;
   private refreshInFlight: Promise<void> | undefined;
   private sessionStream: DisposableLike | undefined;
   private readonly editorSyncDisposables: DisposableLike[] = [];
   private editorSyncTimer: NodeJS.Timeout | undefined;
+  private sidebarReadyTimer: NodeJS.Timeout | undefined;
   private sessionStreamSessionId = "";
   private selectedThreadId = "";
   private composeMode = false;
+  private viewReady = false;
+  private preferPanelHost = false;
   private lastState: ThreadPanelViewState | undefined;
   private lastStatusMessage = "";
   private lastErrorMessage = "";
@@ -162,9 +193,23 @@ class DefaultThreadPanelController implements ThreadPanelController {
   constructor(vscodeLike: ThreadPanelVscodeLike, api: AgentPanelApi) {
     this.vscode = vscodeLike;
     this.api = api;
+    this.viewRegistration = this.registerSidebarView();
   }
 
   async openOrReveal(): Promise<void> {
+    if (this.preferPanelHost && this.panel) {
+      this.panel.reveal(this.vscode.viewColumn.one);
+      await this.refresh();
+      return;
+    }
+    if (this.viewRegistration) {
+      await this.revealSidebarView();
+      if (this.view?.show) {
+        this.view.show(true);
+      }
+      await this.refreshIfOpen();
+      return;
+    }
     if (this.panel) {
       this.panel.reveal(this.vscode.viewColumn.one);
       await this.refresh();
@@ -200,7 +245,7 @@ class DefaultThreadPanelController implements ThreadPanelController {
   }
 
   async refreshIfOpen(): Promise<void> {
-    if (!this.panel) {
+    if (!this.currentHost()) {
       return;
     }
     await this.refresh();
@@ -210,13 +255,78 @@ class DefaultThreadPanelController implements ThreadPanelController {
     this.stopRefreshLoop();
     this.stopEditorSync();
     this.stopSessionStream();
+    if (this.sidebarReadyTimer) {
+      clearTimeout(this.sidebarReadyTimer);
+      this.sidebarReadyTimer = undefined;
+    }
+    this.viewRegistration?.dispose();
+    this.view = undefined;
     const panel = this.panel;
     this.panel = undefined;
     panel?.dispose();
   }
 
+  private registerSidebarView(): DisposableLike | undefined {
+    const registerProvider = this.vscode.window.registerWebviewViewProvider;
+    if (typeof registerProvider !== "function") {
+      return undefined;
+    }
+    return registerProvider(DefaultThreadPanelController.sidebarViewId, {
+      resolveWebviewView: (view) => {
+        this.attachView(view);
+      },
+    });
+  }
+
+  private attachView(view: ThreadPanelWebviewViewLike): void {
+    this.view = view;
+    this.viewReady = false;
+    if (this.panel && !this.preferPanelHost) {
+      this.panel.dispose();
+      this.panel = undefined;
+    }
+    view.webview.options = {
+      enableScripts: true,
+    };
+    const nonce = randomBytes(16).toString("hex");
+    view.webview.html = renderThreadPanelHtml(nonce);
+    view.webview.onDidReceiveMessage((message) => {
+      void this.handleMessage(message);
+    });
+    this.armSidebarReadyFallback();
+    this.startEditorSync();
+    this.restartRefreshLoop();
+    void this.refresh();
+  }
+
+  private async revealSidebarView(): Promise<void> {
+    const executeCommand = this.vscode.commands?.executeCommand;
+    if (typeof executeCommand !== "function") {
+      return;
+    }
+    try {
+      await executeCommand(
+        `workbench.view.extension.${DefaultThreadPanelController.sidebarContainerId}`,
+      );
+    } catch {
+      // Cursor/VS Code 버전에 따라 컨테이너 reveal command가 다를 수 있어, 실패 시 조용히 폴백한다.
+    }
+    try {
+      await executeCommand(`${DefaultThreadPanelController.sidebarViewId}.focus`);
+    } catch {
+      // 자동 focus command가 없는 환경에서는 컨테이너 reveal만으로 충분하다.
+    }
+  }
+
+  private currentHost(): { webview: ThreadPanelWebviewLike; title?: string; description?: string } | undefined {
+    if (this.preferPanelHost && this.panel) {
+      return this.panel;
+    }
+    return this.view ?? this.panel;
+  }
+
   private async refresh(): Promise<void> {
-    if (!this.panel) {
+    if (!this.currentHost()) {
       return;
     }
     if (this.refreshInFlight) {
@@ -233,8 +343,8 @@ class DefaultThreadPanelController implements ThreadPanelController {
   }
 
   private async refreshCore(): Promise<void> {
-    const panel = this.panel;
-    if (!panel) {
+    const host = this.currentHost();
+    if (!host) {
       return;
     }
 
@@ -278,7 +388,7 @@ class DefaultThreadPanelController implements ThreadPanelController {
 
       this.lastState = state;
       this.updatePanelTitle(state);
-      await panel.webview.postMessage({ type: "state", state });
+      await host.webview.postMessage({ type: "state", state });
       if (detail && !this.composeMode) {
         this.restartSessionStream(settings.agentBaseUrl, detail.thread.sessionId);
         void this.publishSessionPresence(settings.agentBaseUrl, state);
@@ -296,7 +406,7 @@ class DefaultThreadPanelController implements ThreadPanelController {
       );
       this.lastState = state;
       this.updatePanelTitle(state);
-      await panel.webview.postMessage({ type: "state", state });
+      await host.webview.postMessage({ type: "state", state });
     }
   }
 
@@ -304,6 +414,14 @@ class DefaultThreadPanelController implements ThreadPanelController {
     const message = objectValue(rawMessage) as unknown as ThreadPanelMessage;
     try {
       switch (text(message.type)) {
+        case "ready":
+          this.viewReady = true;
+          this.preferPanelHost = false;
+          if (this.sidebarReadyTimer) {
+            clearTimeout(this.sidebarReadyTimer);
+            this.sidebarReadyTimer = undefined;
+          }
+          return;
         case "refresh":
           await this.refresh();
           return;
@@ -597,7 +715,7 @@ class DefaultThreadPanelController implements ThreadPanelController {
   }
 
   private scheduleEditorSync(): void {
-    if (!this.panel || this.composeMode) {
+    if (!this.currentHost() || this.composeMode) {
       return;
     }
     if (this.editorSyncTimer) {
@@ -618,8 +736,8 @@ class DefaultThreadPanelController implements ThreadPanelController {
   }
 
   private applySessionSnapshot(detail: AgentPanelThreadDetail): void {
-    const panel = this.panel;
-    if (!panel) {
+    const host = this.currentHost();
+    if (!host) {
       return;
     }
 
@@ -650,7 +768,7 @@ class DefaultThreadPanelController implements ThreadPanelController {
 
     this.lastState = nextState;
     this.updatePanelTitle(nextState);
-    void panel.webview.postMessage({ type: "state", state: nextState });
+    void host.webview.postMessage({ type: "state", state: nextState });
   }
 
   private async publishSessionPresence(
@@ -811,14 +929,76 @@ class DefaultThreadPanelController implements ThreadPanelController {
     }
   }
 
+  private armSidebarReadyFallback(): void {
+    if (!this.view) {
+      return;
+    }
+    if (this.sidebarReadyTimer) {
+      clearTimeout(this.sidebarReadyTimer);
+    }
+    this.sidebarReadyTimer = setTimeout(() => {
+      if (!this.view || this.viewReady) {
+        return;
+      }
+      void this.openFallbackPanel(
+        "Cursor 사이드바 렌더러가 응답하지 않아 편집기 패널로 전환했습니다.",
+      );
+    }, 1200);
+  }
+
+  private async openFallbackPanel(statusMessage: string): Promise<void> {
+    if (this.panel) {
+      this.preferPanelHost = true;
+      this.lastStatusMessage = statusMessage;
+      this.panel.reveal(this.vscode.viewColumn.one);
+      await this.refresh();
+      return;
+    }
+
+    const panel = this.vscode.window.createWebviewPanel(
+      "vibedeckThreadsFallback",
+      "VibeDeck 세션",
+      this.vscode.viewColumn.one,
+      {
+        enableScripts: true,
+        retainContextWhenHidden: true,
+      },
+    );
+
+    const nonce = randomBytes(16).toString("hex");
+    panel.webview.html = renderThreadPanelHtml(nonce);
+    panel.onDidDispose(() => {
+      if (this.panel === panel) {
+        this.panel = undefined;
+        this.preferPanelHost = false;
+      }
+    });
+    panel.webview.onDidReceiveMessage((message) => {
+      void this.handleMessage(message);
+    });
+
+    this.panel = panel;
+    this.preferPanelHost = true;
+    this.lastStatusMessage = statusMessage;
+    this.startEditorSync();
+    this.restartRefreshLoop();
+    await this.refresh();
+  }
+
   private updatePanelTitle(state: ThreadPanelViewState): void {
-    if (!this.panel) {
+    if (!this.currentHost()) {
       return;
     }
     const title = state.composeMode
       ? "새 스레드"
       : state.currentThread?.title || "세션";
-    this.panel.title = `VibeDeck: ${title}`;
+    if (this.panel) {
+      this.panel.title = `VibeDeck: ${title}`;
+      return;
+    }
+    if (this.view) {
+      this.view.description = title;
+    }
   }
 }
 
@@ -834,6 +1014,8 @@ function buildViewState(input: {
   errorMessage: string;
 }): ThreadPanelViewState {
   const currentThread = input.detail?.thread ?? null;
+  const liveState = normalizeSessionLiveState(input.detail?.liveState);
+  const operationState = normalizeSessionOperationState(input.detail?.operationState);
   return {
     agentBaseUrl: input.settings.agentBaseUrl,
     autoRefreshMs: input.settings.autoRefreshMs,
@@ -846,10 +1028,10 @@ function buildViewState(input: {
     threads: input.threads,
     selectedThreadId: input.selectedThreadId,
     currentThread,
-    currentJobId: currentThread?.currentJobId || input.detail?.operationState.currentJobId || "",
+    currentJobId: currentThread?.currentJobId || operationState.currentJobId || "",
     events: input.detail?.events ?? [],
-    live: input.detail?.liveState ?? emptySessionLiveState(),
-    operation: input.detail?.operationState ?? emptySessionOperationState(),
+    live: liveState,
+    operation: operationState,
     derived: deriveThreadState(input.detail, input.errorMessage),
   };
 }
@@ -1009,6 +1191,125 @@ function emptySessionOperationState(): AgentPanelThreadDetail["operationState"] 
     runTopErrors: [],
     currentJobFiles: [],
     lastError: "",
+  };
+}
+
+function normalizeSessionLiveState(
+  value: AgentPanelThreadDetail["liveState"] | undefined,
+): AgentPanelThreadDetail["liveState"] {
+  const fallback = emptySessionLiveState();
+  const input = objectValue(value);
+  const composer = objectValue(input.composer);
+  const focus = objectValue(input.focus);
+  const activity = objectValue(input.activity);
+  const reasoning = objectValue(input.reasoning);
+  const plan = objectValue(input.plan);
+  const tools = objectValue(input.tools);
+  const terminal = objectValue(input.terminal);
+  const workspace = objectValue(input.workspace);
+  return {
+    participants: objectArray(input.participants).map((item) => ({
+      participantId: text(item.participantId),
+      clientType: text(item.clientType),
+      displayName: text(item.displayName),
+      active: item.active === true,
+      lastSeenAt: numberValue(item.lastSeenAt),
+    })),
+    composer: {
+      draftText: firstNonEmptyText(text(composer.draftText), fallback.composer.draftText),
+      isTyping: composer.isTyping === true,
+      updatedAt: numberValue(composer.updatedAt) || fallback.composer.updatedAt,
+    },
+    focus: {
+      activeFilePath: firstNonEmptyText(text(focus.activeFilePath), fallback.focus.activeFilePath),
+      selection: firstNonEmptyText(text(focus.selection), fallback.focus.selection),
+      patchPath: firstNonEmptyText(text(focus.patchPath), fallback.focus.patchPath),
+      runErrorPath: firstNonEmptyText(text(focus.runErrorPath), fallback.focus.runErrorPath),
+      runErrorLine: numberValue(focus.runErrorLine) || fallback.focus.runErrorLine,
+      updatedAt: numberValue(focus.updatedAt) || fallback.focus.updatedAt,
+    },
+    activity: {
+      phase: firstNonEmptyText(text(activity.phase), fallback.activity.phase),
+      summary: firstNonEmptyText(text(activity.summary), fallback.activity.summary),
+      updatedAt: numberValue(activity.updatedAt) || fallback.activity.updatedAt,
+    },
+    reasoning: {
+      title: firstNonEmptyText(text(reasoning.title), fallback.reasoning.title),
+      summary: firstNonEmptyText(text(reasoning.summary), fallback.reasoning.summary),
+      sourceKind: firstNonEmptyText(text(reasoning.sourceKind), fallback.reasoning.sourceKind),
+      updatedAt: numberValue(reasoning.updatedAt) || fallback.reasoning.updatedAt,
+    },
+    plan: {
+      summary: firstNonEmptyText(text(plan.summary), fallback.plan.summary),
+      items: objectArray(plan.items).map((item) => ({
+        id: text(item.id),
+        label: text(item.label),
+        status: text(item.status),
+        detail: text(item.detail),
+        updatedAt: numberValue(item.updatedAt),
+      })),
+      updatedAt: numberValue(plan.updatedAt) || fallback.plan.updatedAt,
+    },
+    tools: {
+      currentLabel: firstNonEmptyText(text(tools.currentLabel), fallback.tools.currentLabel),
+      currentStatus: firstNonEmptyText(text(tools.currentStatus), fallback.tools.currentStatus),
+      activities: objectArray(tools.activities).map((item) => ({
+        kind: text(item.kind),
+        label: text(item.label),
+        status: text(item.status),
+        detail: text(item.detail),
+        at: numberValue(item.at),
+      })),
+      updatedAt: numberValue(tools.updatedAt) || fallback.tools.updatedAt,
+    },
+    terminal: {
+      status: firstNonEmptyText(text(terminal.status), fallback.terminal.status),
+      profileId: firstNonEmptyText(text(terminal.profileId), fallback.terminal.profileId),
+      label: firstNonEmptyText(text(terminal.label), fallback.terminal.label),
+      command: firstNonEmptyText(text(terminal.command), fallback.terminal.command),
+      summary: firstNonEmptyText(text(terminal.summary), fallback.terminal.summary),
+      excerpt: firstNonEmptyText(text(terminal.excerpt), fallback.terminal.excerpt),
+      output: firstNonEmptyText(text(terminal.output), fallback.terminal.output),
+      updatedAt: numberValue(terminal.updatedAt) || fallback.terminal.updatedAt,
+    },
+    workspace: {
+      rootPath: firstNonEmptyText(text(workspace.rootPath), fallback.workspace.rootPath),
+      activeFilePath: firstNonEmptyText(text(workspace.activeFilePath), fallback.workspace.activeFilePath),
+      patchFiles: parseStringList(workspace.patchFiles),
+      changedFiles: parseStringList(workspace.changedFiles),
+      updatedAt: numberValue(workspace.updatedAt) || fallback.workspace.updatedAt,
+    },
+  };
+}
+
+function normalizeSessionOperationState(
+  value: AgentPanelThreadDetail["operationState"] | undefined,
+): AgentPanelThreadDetail["operationState"] {
+  const fallback = emptySessionOperationState();
+  const input = objectValue(value);
+  return {
+    currentJobId: firstNonEmptyText(text(input.currentJobId), fallback.currentJobId),
+    phase: firstNonEmptyText(text(input.phase), fallback.phase),
+    patchSummary: firstNonEmptyText(text(input.patchSummary), fallback.patchSummary),
+    patchFileCount: numberValue(input.patchFileCount) || fallback.patchFileCount,
+    patchFiles: parseStringList(input.patchFiles),
+    patchResultStatus: firstNonEmptyText(text(input.patchResultStatus), fallback.patchResultStatus),
+    patchResultMessage: firstNonEmptyText(text(input.patchResultMessage), fallback.patchResultMessage),
+    runProfileId: firstNonEmptyText(text(input.runProfileId), fallback.runProfileId),
+    runLabel: firstNonEmptyText(text(input.runLabel), fallback.runLabel),
+    runCommand: firstNonEmptyText(text(input.runCommand), fallback.runCommand),
+    runStatus: firstNonEmptyText(text(input.runStatus), fallback.runStatus),
+    runSummary: firstNonEmptyText(text(input.runSummary), fallback.runSummary),
+    runExcerpt: firstNonEmptyText(text(input.runExcerpt), fallback.runExcerpt),
+    runOutput: firstNonEmptyText(text(input.runOutput), fallback.runOutput),
+    runChangedFiles: parseStringList(input.runChangedFiles),
+    runTopErrors: objectArray(input.runTopErrors).map((item) => ({
+      path: text(item.path),
+      line: numberValue(item.line),
+      message: text(item.message),
+    })),
+    currentJobFiles: parseStringList(input.currentJobFiles),
+    lastError: firstNonEmptyText(text(input.lastError), fallback.lastError),
   };
 }
 
@@ -1439,9 +1740,31 @@ function renderThreadPanelHtml(nonce: string): string {
   </style>
 </head>
 <body>
-  <div id="app"></div>
+  <div id="app"><div class="card flat"><div class="title">공유 세션을 불러오는 중...</div><div class="muted">잠시 후에도 바뀌지 않으면 VibeDeck: Show Bridge Status와 패널 오류 문구를 확인하세요.</div></div></div>
   <script nonce="${nonce}">
+    const appRoot = document.getElementById("app");
+    function safeEsc(value) {
+      return String(value || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    }
+    function renderFatalError(error) {
+      if (!appRoot) {
+        return;
+      }
+      const message = error instanceof Error ? (error.stack || error.message) : String(error || "알 수 없는 오류");
+      appRoot.innerHTML = '<div class="card flat"><div class="title">패널을 그리지 못했습니다.</div><div class="muted">아래 오류를 확인해 주세요.</div><pre>' + safeEsc(message) + '</pre></div>';
+    }
+
+    window.addEventListener("error", function(event) {
+      renderFatalError(event.error || event.message);
+    });
+
+    window.addEventListener("unhandledrejection", function(event) {
+      renderFatalError(event.reason);
+    });
+
+    try {
     const vscode = acquireVsCodeApi();
+    vscode.postMessage({ type: "ready" });
     let state = emptyState();
     let draftPrompt = "";
     let draftSyncTimer = undefined;
@@ -1609,13 +1932,13 @@ function renderThreadPanelHtml(nonce: string): string {
     }
 
     function renderSidebarSummary() {
-      const title = state.composeMode ? '새 세션' : (state.currentThread?.title || '선택된 세션 없음');
-      const stateText = state.operation.phase || state.currentThread?.state || '-';
-      const activity = state.live.activity.summary || state.currentThread?.lastEventText || '아직 작업 기록이 없습니다.';
+      const title = state.composeMode ? '새 세션' : ((state.currentThread && state.currentThread.title) || '선택된 세션 없음');
+      const stateText = state.operation.phase || ((state.currentThread && state.currentThread.state) || '-');
+      const activity = state.live.activity.summary || ((state.currentThread && state.currentThread.lastEventText) || '아직 작업 기록이 없습니다.');
       return [
         '<div class="eyebrow">현재 세션</div>',
         '<div class="title small">' + esc(title) + '</div>',
-        '<div class="row"><span class="badge ' + badgeTone(stateText) + '">' + esc(stateText) + '</span><span class="muted">' + esc(fmt(state.currentThread?.updatedAt || state.refreshedAt, false)) + '</span></div>',
+        '<div class="row"><span class="badge ' + badgeTone(stateText) + '">' + esc(stateText) + '</span><span class="muted">' + esc(fmt((state.currentThread && state.currentThread.updatedAt) || state.refreshedAt, false)) + '</span></div>',
         '<div class="muted">' + esc(activity) + '</div>',
       ].join('');
     }
@@ -1666,8 +1989,8 @@ function renderThreadPanelHtml(nonce: string): string {
     }
 
     function renderSessionHeader() {
-      const title = state.composeMode ? '새 세션' : (state.currentThread?.title || '세션을 선택하세요');
-      const summary = state.live.activity.summary || state.currentThread?.lastEventText || '프롬프트를 보내 작업을 시작하세요.';
+      const title = state.composeMode ? '새 세션' : ((state.currentThread && state.currentThread.title) || '세션을 선택하세요');
+      const summary = state.live.activity.summary || ((state.currentThread && state.currentThread.lastEventText) || '프롬프트를 보내 작업을 시작하세요.');
       const activeFilePath = state.live.workspace.activeFilePath || state.live.focus.activeFilePath || '';
       const terminalStatus = state.live.terminal.status || state.derived.runStatus || '';
       const changedCount = state.live.workspace.changedFiles.length || state.derived.currentJobFiles.length || 0;
@@ -1680,7 +2003,7 @@ function renderThreadPanelHtml(nonce: string): string {
         '      <div class="session-title">' + esc(title) + '</div>',
         '      <div class="session-summary">' + esc(summary) + '</div>',
         '    </div>',
-        '    <span class="badge ' + badgeTone(state.operation.phase || state.currentThread?.state) + '">' + esc(state.operation.phase || state.currentThread?.state || '-') + '</span>',
+        '    <span class="badge ' + badgeTone(state.operation.phase || (state.currentThread && state.currentThread.state) || '-') + '">' + esc(state.operation.phase || ((state.currentThread && state.currentThread.state) || '-')) + '</span>',
         '  </div>',
         '  <div class="row">',
         '    <span class="pill ' + (state.adapter.ready ? 'ok' : 'bad') + '">브리지 ' + esc(state.adapter.name || '-') + '</span>',
@@ -1688,7 +2011,7 @@ function renderThreadPanelHtml(nonce: string): string {
         (terminalStatus ? '<span class="pill">실행 ' + esc(terminalStatus) + '</span>' : ''),
         (changedCount ? '<span class="pill">변경 ' + esc(String(changedCount)) + '</span>' : ''),
         (participants ? '<span class="pill">참여 ' + esc(String(participants)) + '</span>' : ''),
-        '    <span class="pill">업데이트 ' + esc(fmt(state.currentThread?.updatedAt || state.refreshedAt, false)) + '</span>',
+        '    <span class="pill">업데이트 ' + esc(fmt((state.currentThread && state.currentThread.updatedAt) || state.refreshedAt, false)) + '</span>',
         '  </div>',
         '</div>',
       ].join('');
@@ -1907,7 +2230,7 @@ function renderThreadPanelHtml(nonce: string): string {
     }
 
     function nl2br(value) {
-      return esc(value).replace(/\n/g, '<br />');
+      return esc(value).replace(/\\n/g, '<br />');
     }
 
     function renderCheckbox(key, label, checked) {
@@ -1948,6 +2271,9 @@ function renderThreadPanelHtml(nonce: string): string {
 
     function attr(value) {
       return esc(value);
+    }
+    } catch (error) {
+      renderFatalError(error);
     }
   </script>
 </body>

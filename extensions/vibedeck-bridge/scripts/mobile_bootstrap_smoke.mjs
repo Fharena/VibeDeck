@@ -8,6 +8,7 @@ import {
 
 const clipboard = { value: "" };
 const postedMessages = [];
+let ensureAgentReadyCount = 0;
 
 const panel = {
   title: "",
@@ -77,6 +78,7 @@ const controller = createMobileBootstrapController(
           signalingBaseUrl: "http://127.0.0.1:8081",
           workspaceRoot: "C:/demo/workspace",
           currentThreadId: "thread-qr-1",
+          currentSessionId: "sid-qr-1",
           adapter: {
             name: "cursor-agent-cli",
             mode: "cursor_agent_cli",
@@ -102,6 +104,9 @@ const controller = createMobileBootstrapController(
     resolveLanHost() {
       return "192.168.0.24";
     },
+    async ensureAgentReady() {
+      ensureAgentReadyCount += 1;
+    },
     async renderQRCodeSvg(value) {
       return `<svg data-value="${value}"></svg>`;
     },
@@ -111,7 +116,7 @@ const controller = createMobileBootstrapController(
 await controller.copyLink();
 assert.equal(
   clipboard.value,
-  "vibedeck://bootstrap?agent=http%3A%2F%2F192.168.0.24%3A8080&signaling=http%3A%2F%2F192.168.0.24%3A8081&thread=thread-qr-1",
+  "vibedeck://bootstrap?agent=http%3A%2F%2F192.168.0.24%3A8080&signaling=http%3A%2F%2F192.168.0.24%3A8081&thread=thread-qr-1&session=sid-qr-1",
 );
 
 await controller.openOrReveal();
@@ -119,7 +124,10 @@ assert.match(panel.webview.html, /VibeDeck Mobile Bootstrap/);
 assert.equal(postedMessages.at(-1)?.type, "state");
 assert.equal(postedMessages.at(-1)?.state.publicAgentBaseUrl, "http://192.168.0.24:8080");
 assert.equal(postedMessages.at(-1)?.state.currentThreadId, "thread-qr-1");
+assert.equal(postedMessages.at(-1)?.state.currentSessionId, "sid-qr-1");
 assert.match(postedMessages.at(-1)?.state.qrSvg, /svg/);
+assert.match(postedMessages.at(-1)?.state.warning, /0\.0\.0\.0/);
+assert.equal(ensureAgentReadyCount, 2);
 
 assert.equal(
   buildMobileBootstrapLink({
@@ -127,6 +135,7 @@ assert.equal(
     agentBaseUrl: "http://192.168.0.24:8080",
     signalingBaseUrl: "http://192.168.0.24:8081",
     threadId: "thread-qr-1",
+    sessionId: "sid-qr-1",
   }),
   clipboard.value,
 );
@@ -136,4 +145,3 @@ assert.equal(
 );
 
 console.log("mobile bootstrap smoke ok");
-

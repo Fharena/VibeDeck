@@ -68,6 +68,7 @@ docs/
 - 모바일 상태 화면이 `GET /v1/agent/bootstrap`로 agent/signaling/workspace/current thread/recent threads를 자동 조회해 기본 연결값을 채움
 - Cursor extension이 `VibeDeck: Open Mobile Bootstrap` / `VibeDeck: Copy Mobile Bootstrap Link`로 LAN 기준 QR/deep link(`vibedeck://bootstrap`)를 제공
 - 모바일 앱이 deep link를 수신하면 agent/signaling/thread를 즉시 적용하고, 최근 연결 host도 함께 기억함
+- 실기기 연결 시에는 extension local agent가 LAN에서 보이도록 `vibedeckBridge.agent.host=0.0.0.0`와 `VibeDeck: Restart Local Agent`가 필요하고, `signaling` 서버는 별도로 실행해야 함
 - 모바일 메인 셸이 Cursor 계열 dark session feed로 정리되어 요청 작성, 작업 로그, 패치/실행 요약, 세션 복구 상태를 한 화면 흐름으로 확인 가능
 - 메인 셸의 workstream 액션에서 터미널 출력과 파일 포커스 시트를 바로 열어 실행 상태와 변경 파일을 확인 가능
 - 드로어 파일 탭에서 작업공간 트리, git 상태(`M/U/A/D`), 현재 active/patch/error 파일 힌트를 보고 파일 내용을 바로 미리보기/간단 편집 가능
@@ -265,7 +266,7 @@ npm --prefix extensions/vibedeck-bridge run build
 6. local agent 자동 부트스트랩은 기본값 `vibedeckBridge.agent.autoStart=true`, `vibedeckBridge.agent.launchMode=auto`로 켜집니다.
 7. 저장소 checkout에서 extension을 직접 로드한 상태라면 `launchMode=auto`가 repo 레이아웃을 감지해 내부 `go_run` 경로를 올립니다. 응답이 없으면 `vibedeck_doctor.ps1`로 도구/경로 상태를 먼저 확인하세요.
 8. 별도 binary를 쓸 때는 `vibedeckBridge.agent.launchMode=binary`, `vibedeckBridge.agent.binaryPath=<agent executable>`만 지정하면 됩니다.
-9. `VibeDeck: Open Shared Threads`로 IDE 안에서 shared thread panel 열기
+9. `VibeDeck: Open Shared Threads`로 IDE 안에서 shared thread 사이드바 열기
 10. 수동 fallback이 필요할 때만 `VibeDeck: Copy Agent Env`로 bridge 주소를 복사해 외부 agent에 전달
 
 자동 부트스트랩에서 쓰는 핵심 설정:

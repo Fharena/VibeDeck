@@ -14,6 +14,7 @@ void main() {
 
     expect(controller.currentThreadId, 'thread-shared-1');
     expect(controller.currentThreadTitle, 'shared session thread');
+    expect(controller.currentSharedSessionId, 'thread-shared-1');
     expect(controller.currentJobId, 'job-shared-1');
     expect(controller.patchSummary, 'shared session patch ready');
     expect(controller.patchFiles, hasLength(1));
@@ -21,6 +22,7 @@ void main() {
     expect(controller.threadEvents, hasLength(2));
     expect(controller.sessionSyncStatus, SessionSyncStatus.live);
     expect(controller.sessionLastSyncedAt, greaterThan(0));
+    expect(api.sessionDetailRequests, contains('thread-shared-1'));
   });
 
   test('applies live session stream updates', () async {
@@ -70,6 +72,7 @@ class FakeSharedSessionAgentApi extends AgentApi {
   final StreamController<Map<String, dynamic>> _streamController =
       StreamController<Map<String, dynamic>>.broadcast();
   late Map<String, dynamic> _detail = _buildDetail();
+  final List<String> sessionDetailRequests = <String>[];
   bool failSessionDetail = false;
 
   @override
@@ -165,7 +168,8 @@ class FakeSharedSessionAgentApi extends AgentApi {
         {
           'id': 'thread-shared-1',
           'title': 'shared session thread',
-          'sessionId': 'sid-shared-control',
+          'sessionId': 'thread-shared-1',
+          'controlSessionId': 'sid-shared-control',
           'state': 'reviewing',
           'currentJobId': 'job-shared-1',
           'lastEventKind': 'patch_ready',
@@ -186,6 +190,7 @@ class FakeSharedSessionAgentApi extends AgentApi {
   @override
   Future<Map<String, dynamic>> sessionDetail(
       String baseUrl, String sessionId) async {
+    sessionDetailRequests.add(sessionId);
     if (failSessionDetail) {
       throw AgentApiException(503, 'session sync unavailable');
     }
@@ -282,7 +287,8 @@ class FakeSharedSessionAgentApi extends AgentApi {
       'thread': {
         'id': 'thread-shared-1',
         'title': 'shared session thread',
-        'sessionId': 'sid-shared-control',
+        'sessionId': 'thread-shared-1',
+        'controlSessionId': 'sid-shared-control',
         'state': 'reviewing',
         'currentJobId': 'job-shared-1',
         'lastEventKind': 'patch_ready',
