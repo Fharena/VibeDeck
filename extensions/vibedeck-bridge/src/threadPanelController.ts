@@ -82,6 +82,8 @@ export interface ThreadPanelVscodeLike {
 
 export interface ThreadPanelController {
   openOrReveal(): Promise<void>;
+  openInEditor(): Promise<void>;
+  openInSidebar(): Promise<void>;
   refreshIfOpen(): Promise<void>;
   dispose(): void;
 }
@@ -130,6 +132,7 @@ interface ThreadPanelDerivedState {
 interface ThreadPanelViewState {
   agentBaseUrl: string;
   autoRefreshMs: number;
+  hostMode: "sidebar" | "editor";
   composeMode: boolean;
   statusMessage: string;
   errorMessage: string;
@@ -216,32 +219,33 @@ class DefaultThreadPanelController implements ThreadPanelController {
       return;
     }
 
-    const panel = this.vscode.window.createWebviewPanel(
-      "vibedeckThreads",
-      "VibeDeck 세션",
-      this.vscode.viewColumn.one,
-      {
-        enableScripts: true,
-        retainContextWhenHidden: true,
-      },
-    );
+    await this.openInEditor();
+  }
 
-    const nonce = randomBytes(16).toString("hex");
-    panel.webview.html = renderThreadPanelHtml(nonce);
-    panel.onDidDispose(() => {
-      this.panel = undefined;
-      this.stopRefreshLoop();
-      this.stopEditorSync();
-      this.stopSessionStream();
-    });
-    panel.webview.onDidReceiveMessage((message) => {
-      void this.handleMessage(message);
-    });
-
-    this.panel = panel;
+  async openInEditor(): Promise<void> {
+    this.preferPanelHost = true;
+    if (this.panel) {
+      this.panel.reveal(this.vscode.viewColumn.one);
+      await this.refresh();
+      return;
+    }
+    this.panel = this.createEditorPanel("vibedeckThreads", "VibeDeck 세션");
     this.startEditorSync();
     this.restartRefreshLoop();
     await this.refresh();
+  }
+
+  async openInSidebar(): Promise<void> {
+    this.preferPanelHost = false;
+    if (this.viewRegistration) {
+      await this.revealSidebarView();
+      if (this.view?.show) {
+        this.view.show(true);
+      }
+      await this.refreshIfOpen();
+      return;
+    }
+    await this.openInEditor();
   }
 
   async refreshIfOpen(): Promise<void> {
@@ -299,6 +303,39 @@ class DefaultThreadPanelController implements ThreadPanelController {
     void this.refresh();
   }
 
+  private createEditorPanel(viewType: string, title: string): ThreadPanelWebviewPanelLike {
+    const panel = this.vscode.window.createWebviewPanel(
+      viewType,
+      title,
+      this.vscode.viewColumn.one,
+      {
+        enableScripts: true,
+        retainContextWhenHidden: true,
+      },
+    );
+
+    const nonce = randomBytes(16).toString("hex");
+    panel.webview.html = renderThreadPanelHtml(nonce);
+    panel.onDidDispose(() => {
+      if (this.panel !== panel) {
+        return;
+      }
+      this.panel = undefined;
+      this.preferPanelHost = false;
+      if (!this.view) {
+        this.stopRefreshLoop();
+        this.stopEditorSync();
+        this.stopSessionStream();
+        return;
+      }
+      void this.refresh();
+    });
+    panel.webview.onDidReceiveMessage((message) => {
+      void this.handleMessage(message);
+    });
+    return panel;
+  }
+
   private async revealSidebarView(): Promise<void> {
     const executeCommand = this.vscode.commands?.executeCommand;
     if (typeof executeCommand !== "function") {
@@ -323,6 +360,13 @@ class DefaultThreadPanelController implements ThreadPanelController {
       return this.panel;
     }
     return this.view ?? this.panel;
+  }
+
+  private currentHostMode(): "sidebar" | "editor" {
+    if (this.preferPanelHost || !this.view) {
+      return "editor";
+    }
+    return "sidebar";
   }
 
   private async refresh(): Promise<void> {
@@ -376,6 +420,7 @@ class DefaultThreadPanelController implements ThreadPanelController {
 
       const state = buildViewState({
         settings,
+        hostMode: this.currentHostMode(),
         adapter,
         runProfiles,
         threads,
@@ -399,6 +444,7 @@ class DefaultThreadPanelController implements ThreadPanelController {
       const state = buildFallbackState(
         settings,
         this.lastState,
+        this.currentHostMode(),
         describeError(error),
         this.lastStatusMessage,
         this.composeMode,
@@ -416,7 +462,6 @@ class DefaultThreadPanelController implements ThreadPanelController {
       switch (text(message.type)) {
         case "ready":
           this.viewReady = true;
-          this.preferPanelHost = false;
           if (this.sidebarReadyTimer) {
             clearTimeout(this.sidebarReadyTimer);
             this.sidebarReadyTimer = undefined;
@@ -424,6 +469,12 @@ class DefaultThreadPanelController implements ThreadPanelController {
           return;
         case "refresh":
           await this.refresh();
+          return;
+        case "open-in-editor":
+          await this.openInEditor();
+          return;
+        case "open-in-sidebar":
+          await this.openInSidebar();
           return;
         case "new-thread": {
           const previousSessionId = this.currentSessionID();
@@ -749,6 +800,7 @@ class DefaultThreadPanelController implements ThreadPanelController {
         agentBaseUrl: previous?.agentBaseUrl || settings.agentBaseUrl,
         autoRefreshMs: previous?.autoRefreshMs || settings.autoRefreshMs,
       },
+      hostMode: this.currentHostMode(),
       adapter: previous?.adapter ?? {
         name: "",
         mode: "",
@@ -1004,6 +1056,7 @@ class DefaultThreadPanelController implements ThreadPanelController {
 
 function buildViewState(input: {
   settings: ThreadPanelSettings;
+  hostMode: "sidebar" | "editor";
   adapter: AgentPanelAdapterRuntime;
   runProfiles: AgentPanelRunProfile[];
   threads: AgentPanelThreadSummary[];
@@ -1019,6 +1072,7 @@ function buildViewState(input: {
   return {
     agentBaseUrl: input.settings.agentBaseUrl,
     autoRefreshMs: input.settings.autoRefreshMs,
+    hostMode: input.hostMode,
     composeMode: input.composeMode,
     statusMessage: input.statusMessage,
     errorMessage: input.errorMessage,
@@ -1038,6 +1092,7 @@ function buildViewState(input: {
 function buildFallbackState(
   settings: ThreadPanelSettings,
   previous: ThreadPanelViewState | undefined,
+  hostMode: "sidebar" | "editor",
   errorMessage: string,
   statusMessage: string,
   composeMode: boolean,
@@ -1047,6 +1102,7 @@ function buildFallbackState(
     return {
       agentBaseUrl: settings.agentBaseUrl,
       autoRefreshMs: settings.autoRefreshMs,
+      hostMode,
       composeMode,
       statusMessage,
       errorMessage,
@@ -1067,6 +1123,7 @@ function buildFallbackState(
     ...previous,
     agentBaseUrl: settings.agentBaseUrl,
     autoRefreshMs: settings.autoRefreshMs,
+    hostMode,
     composeMode,
     statusMessage,
     errorMessage,
@@ -1970,11 +2027,13 @@ function renderThreadPanelHtml(nonce: string): string {
     function renderTopBar() {
       const title = state.composeMode ? '새 세션' : ((state.currentThread && state.currentThread.title) || '세션을 선택하세요');
       const summary = state.live.activity.summary || ((state.currentThread && state.currentThread.lastEventText) || '채팅을 시작하면 결과가 여기에 이어집니다.');
+      const detachLabel = state.hostMode === 'editor' ? '사이드바로' : '탭으로 열기';
+      const detachAction = state.hostMode === 'editor' ? 'open-in-sidebar' : 'open-in-editor';
       return [
         '<div class="topbar">',
         '  <div class="topbar-actions"><button class="toolbar-button ' + (showThreadDrawer ? 'active' : '') + '" data-action="toggle-thread-drawer">세션</button></div>',
         '  <div class="topbar-main"><div class="topbar-title">' + esc(title) + '</div><div class="topbar-subtitle">' + esc(summary) + '</div></div>',
-        '  <div class="topbar-actions"><button class="toolbar-button" data-action="refresh">새로고침</button><button class="toolbar-button" data-action="new-thread">새 세션</button></div>',
+        '  <div class="topbar-actions"><button class="toolbar-button" data-action="' + detachAction + '">' + detachLabel + '</button><button class="toolbar-button" data-action="refresh">새로고침</button><button class="toolbar-button" data-action="new-thread">새 세션</button></div>',
         '</div>',
       ].join('');
     }

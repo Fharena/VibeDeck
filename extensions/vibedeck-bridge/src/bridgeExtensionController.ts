@@ -315,6 +315,16 @@ class DefaultBridgeExtensionController implements BridgeExtensionController {
       }),
     );
     context.subscriptions.push(
+      this.vscode.commands.registerCommand("vibedeckBridge.openThreadPanelInEditor", async () => {
+        await this.threadPanel.openInEditor();
+      }),
+    );
+    context.subscriptions.push(
+      this.vscode.commands.registerCommand("vibedeckBridge.openThreadPanelInSidebar", async () => {
+        await this.threadPanel.openInSidebar();
+      }),
+    );
+    context.subscriptions.push(
       this.vscode.commands.registerCommand("vibedeckBridge.openMobileBootstrap", async () => {
         await this.mobileBootstrap.openOrReveal();
       }),
