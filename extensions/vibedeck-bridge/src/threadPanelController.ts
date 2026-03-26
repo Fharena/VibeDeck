@@ -77,6 +77,7 @@ export interface ThreadPanelVscodeLike {
   workspace: ThreadPanelWorkspaceLike;
   viewColumn: {
     one: number;
+    beside?: number;
   };
 }
 
@@ -205,14 +206,6 @@ class DefaultThreadPanelController implements ThreadPanelController {
       await this.refresh();
       return;
     }
-    if (this.viewRegistration) {
-      await this.revealSidebarView();
-      if (this.view?.show) {
-        this.view.show(true);
-      }
-      await this.refreshIfOpen();
-      return;
-    }
     if (this.panel) {
       this.panel.reveal(this.vscode.viewColumn.one);
       await this.refresh();
@@ -307,7 +300,7 @@ class DefaultThreadPanelController implements ThreadPanelController {
     const panel = this.vscode.window.createWebviewPanel(
       viewType,
       title,
-      this.vscode.viewColumn.one,
+      this.vscode.viewColumn.beside ?? this.vscode.viewColumn.one,
       {
         enableScripts: true,
         retainContextWhenHidden: true,
