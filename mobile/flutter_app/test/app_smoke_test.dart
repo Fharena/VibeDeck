@@ -30,8 +30,16 @@ void main() {
     expect(find.text('최근 터미널'), findsOneWidget);
     expect(find.text('에러 열기'), findsOneWidget);
     expect(find.textContaining('npm test -- --failed'), findsOneWidget);
-    expect(find.text('작업 로그'), findsWidgets);
     expect(find.text('보내기'), findsOneWidget);
+
+    await tester.scrollUntilVisible(
+      find.text('대화와 결과'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('대화와 결과'), findsOneWidget);
 
     await tester.tap(find.text('파일별 선택'));
     await tester.pumpAndSettle();

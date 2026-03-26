@@ -1662,21 +1662,32 @@ function renderThreadPanelHtml(nonce: string): string {
     summary { cursor: pointer; padding: 10px 12px; color: var(--muted); }
     pre { margin: 0; padding: 12px; background: #10141b; border: 1px solid var(--line-soft); border-radius: 12px; overflow: auto; white-space: pre-wrap; word-break: break-word; font-family: var(--font-mono); font-size: 12px; line-height: 1.55; max-height: 260px; }
     .layout { display: grid; grid-template-columns: 272px minmax(0, 1fr); min-height: 100vh; background: rgba(8, 10, 14, 0.28); }
+    .main-shell { min-height: 100vh; display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; gap: 12px; background: rgba(8, 10, 14, 0.28); padding: 14px 16px; position: relative; }
+    .chat-stack { min-height: 0; }
+    .topbar-shell { position: sticky; top: 0; z-index: 3; }
+    .topbar { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; }
+    .topbar-main { min-width: 0; display: grid; gap: 4px; }
+    .topbar-title { font-size: 16px; font-weight: 700; line-height: 1.35; color: #f4f7fb; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .topbar-subtitle { color: var(--muted); font-size: 12px; line-height: 1.5; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden; }
+    .topbar-actions { display: flex; gap: 8px; align-items: center; }
+    .toolbar-button { border-radius: 8px; padding: 8px 12px; background: #11151c; border: 1px solid var(--line-soft); color: #dfe6f7; font-size: 12px; }
+    .toolbar-button.active { border-color: rgba(124, 184, 255, 0.35); background: #1a2230; }
     .sidebar { padding: 16px 14px; border-right: 1px solid var(--line); background: linear-gradient(180deg, #0b0e14 0%, var(--sidebar) 100%); display: grid; gap: 12px; align-content: start; }
     .main { padding: 14px 16px; display: grid; gap: 12px; align-content: start; min-width: 0; }
-    .workspace-shell { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 12px; align-items: start; }
+    .workspace-shell { display: grid; gap: 12px; align-items: start; }
     .chat-shell { display: grid; gap: 12px; min-width: 0; }
-    .card { border: 1px solid var(--line); border-radius: 16px; background: linear-gradient(180deg, rgba(27, 31, 39, 0.96) 0%, rgba(20, 24, 31, 0.98) 100%); padding: 14px; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.18); }
-    .card.flat { background: rgba(22, 26, 33, 0.94); box-shadow: none; }
+    .card { border: 1px solid var(--line); border-radius: 12px; background: #151a21; padding: 14px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14); }
+    .card.flat { background: #151a21; box-shadow: none; }
     .stack { display: grid; gap: 12px; }
     .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
     .spread { justify-content: space-between; }
-    .threads, .files, .errors, .mini-list, .path-list, .timeline, .summary-strip, .rail-stack { display: grid; gap: 10px; }
+    .threads, .files, .errors, .mini-list, .path-list, .timeline, .summary-strip { display: grid; gap: 10px; }
     .sidebar-top { display: grid; gap: 10px; }
-    .thread { width: 100%; text-align: left; padding: 12px; border-radius: 14px; background: #12161d; }
-    .thread.active { border-color: #406186; background: rgba(47, 69, 99, 0.38); box-shadow: inset 0 0 0 1px rgba(124, 184, 255, 0.18); }
+    .thread { width: 100%; text-align: left; padding: 12px; border-radius: 10px; background: #12161d; }
+    .thread.active { border-color: #406186; background: #182231; box-shadow: inset 0 0 0 1px rgba(124, 184, 255, 0.12); }
     .thread .thread-title { font-size: 13px; font-weight: 600; line-height: 1.45; }
     .thread .thread-meta { display: flex; justify-content: space-between; gap: 8px; margin-top: 8px; color: var(--muted); font-size: 11px; }
+    .thread .thread-state { color: #b9c6d8; font-size: 11px; }
     .thread .thread-body { margin-top: 6px; color: var(--muted); font-size: 12px; line-height: 1.5; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
     .muted { color: var(--muted); font-size: 12px; line-height: 1.55; }
     .eyebrow { color: var(--muted); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; }
@@ -1684,48 +1695,49 @@ function renderThreadPanelHtml(nonce: string): string {
     .title.small { font-size: 14px; }
     .section-head { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
     .section-head .title { font-size: 13px; }
-    .pill { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px; border: 1px solid var(--line-soft); background: #11151c; color: var(--muted); font-size: 12px; }
+    .pill { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line-soft); background: #11151c; color: var(--muted); font-size: 12px; }
     .pill.ok { color: var(--ok); }
     .pill.bad { color: var(--bad); }
     .pill.warn { color: var(--warn); }
     .pill.focus { color: var(--focus); }
-    .badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 999px; border: 1px solid var(--line-soft); background: #11151c; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 8px; border: 1px solid var(--line-soft); background: #11151c; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
     .badge.ok { color: var(--ok); }
     .badge.bad { color: var(--bad); }
     .badge.warn { color: var(--warn); }
     .sidebar-summary { border: 1px solid var(--line-soft); border-radius: 14px; padding: 12px; background: #11151d; }
     .composer-shell { display: grid; gap: 12px; }
-    .composer-actions { display: grid; grid-template-columns: minmax(0, 1fr) 190px auto auto; gap: 10px; align-items: center; }
+    .composer-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
     .checkbox-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 0 12px 12px; }
     .checkbox { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
     .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .summary-strip { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
-    .summary-card, .mini-card { border: 1px solid var(--line-soft); border-radius: 14px; padding: 12px; background: #121720; min-width: 0; }
+    .summary-card, .mini-card { border: 1px solid var(--line-soft); border-radius: 10px; padding: 12px; background: #121720; min-width: 0; }
     .summary-card strong, .mini-card strong { display: block; margin-top: 4px; font-size: 13px; }
     .summary-card { background: linear-gradient(180deg, rgba(27, 32, 40, 0.98) 0%, rgba(19, 23, 30, 0.98) 100%); }
     .list-label { color: var(--muted); font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; }
-    .file, .error { border: 1px solid var(--line-soft); border-radius: 14px; padding: 12px; background: #121720; }
+    .file, .error { border: 1px solid var(--line-soft); border-radius: 10px; padding: 12px; background: #121720; }
     .head { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 6px; align-items: flex-start; }
     .path-button { width: 100%; text-align: left; background: #11151c; font-family: var(--font-mono); font-size: 12px; }
     .empty { padding: 14px; border: 1px dashed var(--line); border-radius: 12px; color: var(--muted); background: #11151c; }
     .banner { display: grid; gap: 8px; }
-    .notice { border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; background: rgba(25, 29, 37, 0.96); }
+    .notice { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; background: #171c24; }
     .notice.error { border-color: rgba(255, 143, 147, 0.38); }
     .notice.info { border-color: rgba(124, 184, 255, 0.32); }
     .session-bar { display: grid; gap: 10px; }
     .session-bar .session-main { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
     .session-bar .session-title { font-size: 18px; font-weight: 700; line-height: 1.35; }
     .session-bar .session-summary { color: var(--muted); font-size: 13px; line-height: 1.6; max-width: 920px; }
+    .session-meta { display: flex; flex-wrap: wrap; gap: 8px 12px; color: var(--muted); font-size: 12px; }
     .chat-panel { display: grid; gap: 12px; }
     .timeline-card { min-height: 420px; }
     .timeline { align-content: start; }
-    .message { border: 1px solid var(--line-soft); border-radius: 16px; padding: 12px 14px; background: #141922; display: grid; gap: 10px; }
-    .message.user { margin-left: 46px; background: linear-gradient(180deg, rgba(34, 46, 63, 0.96) 0%, rgba(24, 35, 50, 0.98) 100%); border-color: rgba(105, 149, 206, 0.32); }
-    .message.assistant { margin-right: 46px; background: linear-gradient(180deg, rgba(26, 30, 38, 0.98) 0%, rgba(19, 23, 30, 0.98) 100%); }
-    .message.system { background: linear-gradient(180deg, rgba(23, 27, 34, 0.98) 0%, rgba(17, 21, 28, 0.98) 100%); border-style: dashed; }
+    .message { border: 1px solid var(--line-soft); border-radius: 10px; padding: 12px 14px; background: #141922; display: grid; gap: 10px; }
+    .message.user { margin-left: 38px; background: #182130; border-color: rgba(105, 149, 206, 0.28); }
+    .message.assistant { margin-right: 38px; background: #151920; }
+    .message.system { background: #14181f; border-style: dashed; }
     .message-meta { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
     .message-author { display: flex; gap: 10px; align-items: flex-start; }
-    .avatar { width: 24px; height: 24px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; background: #0f131b; border: 1px solid var(--line-soft); color: var(--accent-strong); font-size: 11px; font-weight: 700; flex: none; }
+    .avatar { width: 24px; height: 24px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; background: #0f131b; border: 1px solid var(--line-soft); color: var(--accent-strong); font-size: 11px; font-weight: 700; flex: none; }
     .message.user .avatar { color: #d7e9ff; border-color: rgba(105, 149, 206, 0.34); }
     .message-label { font-size: 12px; font-weight: 700; }
     .message-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
@@ -1733,10 +1745,39 @@ function renderThreadPanelHtml(nonce: string): string {
     .message-body { color: #dfe6f7; font-size: 13px; line-height: 1.65; }
     .message-body code { font-family: var(--font-mono); }
     .message-chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
-    .rail-card { border: 1px solid var(--line); border-radius: 16px; background: linear-gradient(180deg, rgba(25, 29, 37, 0.98) 0%, rgba(18, 22, 29, 0.98) 100%); padding: 14px; }
-    .rail-card .section-head { margin-bottom: 2px; }
-    @media (max-width: 1180px) { .workspace-shell, .two-col, .checkbox-grid, .composer-actions { grid-template-columns: 1fr; } .message.user, .message.assistant { margin-left: 0; margin-right: 0; } }
-    @media (max-width: 960px) { .layout { grid-template-columns: 1fr; } .sidebar { border-right: 0; border-bottom: 1px solid var(--line); } }
+    .utility-panel { display: grid; gap: 12px; }
+    .utility-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+    .utility-tab { border: 1px solid var(--line-soft); border-radius: 999px; padding: 8px 12px; background: #11151c; color: var(--muted); font-size: 12px; }
+    .utility-tab.active { border-color: rgba(124, 184, 255, 0.35); background: rgba(47, 69, 99, 0.34); color: #e6eefb; }
+    .utility-body { display: grid; gap: 10px; }
+    .utility-hint { color: var(--muted); font-size: 12px; }
+    .drawer-backdrop { position: fixed; inset: 0; background: rgba(5, 7, 10, 0.56); z-index: 18; }
+    .panel-drawer { position: fixed; top: 10px; bottom: 10px; width: min(340px, calc(100vw - 24px)); border: 1px solid var(--line); border-radius: 12px; background: #10151c; box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28); z-index: 19; display: grid; gap: 12px; align-content: start; padding: 16px; overflow: auto; }
+    .panel-drawer.left { left: 10px; }
+    .drawer-head { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+    .drawer-title { font-size: 14px; font-weight: 700; color: #f4f7fb; }
+    .drawer-subtitle { color: var(--muted); font-size: 12px; line-height: 1.45; }
+    .drawer-close { border-radius: 8px; padding: 6px 10px; background: #11151c; border: 1px solid var(--line-soft); color: var(--muted); font-size: 12px; }
+    .drawer-content { display: grid; gap: 12px; }
+    .change-card { border: 1px solid #2d3644; border-radius: 10px; background: #10161d; overflow: hidden; }
+    .change-card-header { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--line-soft); background: #111820; }
+    .change-card-title { font-size: 13px; font-weight: 700; color: #eef3fb; }
+    .change-card-delta { display: flex; gap: 10px; font-size: 12px; font-weight: 700; }
+    .delta-plus { color: #57c67f; }
+    .delta-minus { color: #f06b77; }
+    .change-file-list { display: grid; }
+    .change-file-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 14px; border-top: 1px solid var(--line-soft); }
+    .change-file-row:first-child { border-top: 0; }
+    .change-file-name { min-width: 0; font-size: 13px; line-height: 1.45; color: #eef3fb; word-break: break-all; }
+    .change-file-stats { display: inline-flex; gap: 10px; font-size: 12px; font-weight: 700; }
+    .change-preview { margin: 0 14px 14px; border: 1px solid #334055; border-radius: 10px; overflow: hidden; background: #0f151c; }
+    .change-preview-head { display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 10px 12px; background: #121a23; border-bottom: 1px solid #334055; }
+    .change-preview-title { min-width: 0; font-size: 12px; font-weight: 600; color: #eef3fb; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .change-preview-body { padding: 12px; font-family: var(--font-mono); font-size: 12px; line-height: 1.55; color: #d8e2f1; white-space: pre-wrap; word-break: break-word; }
+    .change-actions { display: flex; gap: 8px; flex-wrap: wrap; padding: 0 14px 14px; }
+    .timeline { align-content: start; max-height: calc(100vh - 300px); overflow: auto; padding-right: 4px; }
+    @media (max-width: 1180px) { .two-col, .checkbox-grid { grid-template-columns: 1fr; } .message.user, .message.assistant { margin-left: 0; margin-right: 0; } }
+    @media (max-width: 960px) { .layout { grid-template-columns: 1fr; } .sidebar { border-right: 0; border-bottom: 1px solid var(--line); } .main-shell { padding-left: 12px; padding-right: 12px; } .panel-drawer { width: calc(100vw - 20px); left: 10px; } .change-file-row { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
@@ -1770,6 +1811,7 @@ function renderThreadPanelHtml(nonce: string): string {
     let draftSyncTimer = undefined;
     let selectedRunProfileId = "";
     let threadFilter = "";
+    let showThreadDrawer = false;
     let contextOptions = {
       includeActiveFile: true,
       includeSelection: false,
@@ -1799,13 +1841,25 @@ function renderThreadPanelHtml(nonce: string): string {
         post("refresh");
         return;
       }
+      if (action === "toggle-thread-drawer") {
+        showThreadDrawer = !showThreadDrawer;
+        render();
+        return;
+      }
+      if (action === "close-drawers") {
+        showThreadDrawer = false;
+        render();
+        return;
+      }
       if (action === "new-thread") {
         draftPrompt = "";
+        showThreadDrawer = false;
         post("new-thread");
         return;
       }
       if (action === "select-thread") {
         draftPrompt = "";
+        showThreadDrawer = false;
         post("select-thread", { threadId: target.dataset.threadId || "" });
         return;
       }
@@ -1901,44 +1955,54 @@ function renderThreadPanelHtml(nonce: string): string {
       }
       const promptValue = draftPrompt || (state.composeMode ? "" : (state.live.composer.draftText || state.derived.promptText));
       app.innerHTML = [
-        '<div class="layout">',
-        '  <aside class="sidebar">',
-        '    <div class="sidebar-top">',
-        '      <div class="row spread"><div><div class="eyebrow">공유 세션</div><div class="title">세션</div></div><button class="ghost" data-action="refresh">새로고침</button></div>',
-        '      <input id="thread-filter" class="search" placeholder="세션 검색" value="' + attr(threadFilter) + '" />',
-        '      <button class="primary block" data-action="new-thread">새 세션</button>',
-        '    </div>',
-        '    <div class="sidebar-summary">' + renderSidebarSummary() + '</div>',
-        '    <div class="threads">' + renderThreads() + '</div>',
-        '  </aside>',
-        '  <main class="main">',
+        '<div class="main-shell">',
         renderBanner(),
-        '    <section class="workspace-shell">',
-        '      <div class="chat-shell">',
-        '        <section class="card flat chat-panel">' + renderSessionHeader() + '</section>',
-        renderHighlights(),
-        '        <section class="card chat-panel timeline-card"><div class="section-head"><div><div class="title">대화</div><div class="muted">모바일과 패널이 같은 세션 흐름을 이어서 봅니다.</div></div><span class="badge">' + esc(String(state.events.length)) + '개 이벤트</span></div>' + renderTimeline() + '</section>',
-        '        <section class="card flat">' + renderComposer(promptValue) + '</section>',
-        '      </div>',
-        '      <aside class="rail-stack">',
-        '        <section class="rail-card"><div class="section-head"><div><div class="title">검토</div><div class="muted">패치와 적용 상태를 여기서 이어 봅니다.</div></div></div>' + renderReview() + '</section>',
-        '        <section class="rail-card"><div class="section-head"><div><div class="title">실행</div><div class="muted">최근 명령, 출력, 오류를 빠르게 확인합니다.</div></div></div>' + renderTerminal() + '</section>',
-        '        <section class="rail-card"><div class="section-head"><div><div class="title">파일과 포커스</div><div class="muted">현재 파일, 변경 파일, 포커스 위치입니다.</div></div></div>' + renderWorkspace() + '</section>',
-        '      </aside>',
-        '    </section>',
-        '  </main>',
+        '  <section class="card flat topbar-shell">' + renderTopBar() + '</section>',
+        '  <section class="chat-stack">',
+        '    <section class="card chat-panel timeline-card">' + renderTimeline() + '</section>',
+        '  </section>',
+        '  <section class="card flat">' + renderComposer(promptValue) + '</section>',
+        renderThreadDrawer(),
         '</div>',
+      ].join('');
+    }
+
+    function renderTopBar() {
+      const title = state.composeMode ? '새 세션' : ((state.currentThread && state.currentThread.title) || '세션을 선택하세요');
+      const summary = state.live.activity.summary || ((state.currentThread && state.currentThread.lastEventText) || '채팅을 시작하면 결과가 여기에 이어집니다.');
+      return [
+        '<div class="topbar">',
+        '  <div class="topbar-actions"><button class="toolbar-button ' + (showThreadDrawer ? 'active' : '') + '" data-action="toggle-thread-drawer">세션</button></div>',
+        '  <div class="topbar-main"><div class="topbar-title">' + esc(title) + '</div><div class="topbar-subtitle">' + esc(summary) + '</div></div>',
+        '  <div class="topbar-actions"><button class="toolbar-button" data-action="refresh">새로고침</button><button class="toolbar-button" data-action="new-thread">새 세션</button></div>',
+        '</div>',
+      ].join('');
+    }
+
+    function renderThreadDrawer() {
+      if (!showThreadDrawer) {
+        return '';
+      }
+      return [
+        '<button class="drawer-backdrop" data-action="close-drawers" aria-label="드로어 닫기"></button>',
+        '<aside class="panel-drawer left">',
+        '  <div class="drawer-head"><div><div class="drawer-title">세션</div><div class="drawer-subtitle">현재 스레드와 새 세션 시작만 여기서 관리합니다.</div></div><button class="drawer-close" data-action="close-drawers">닫기</button></div>',
+        '  <div class="drawer-content">',
+        '    <input id="thread-filter" class="search" placeholder="세션 검색" value="' + attr(threadFilter) + '" />',
+        '    <div class="row spread"><button class="primary block" data-action="new-thread">새 세션</button><button class="ghost" data-action="refresh">새로고침</button></div>',
+        '    <div class="threads">' + renderThreads() + '</div>',
+        '  </div>',
+        '</aside>',
       ].join('');
     }
 
     function renderSidebarSummary() {
       const title = state.composeMode ? '새 세션' : ((state.currentThread && state.currentThread.title) || '선택된 세션 없음');
-      const stateText = state.operation.phase || ((state.currentThread && state.currentThread.state) || '-');
       const activity = state.live.activity.summary || ((state.currentThread && state.currentThread.lastEventText) || '아직 작업 기록이 없습니다.');
       return [
         '<div class="eyebrow">현재 세션</div>',
         '<div class="title small">' + esc(title) + '</div>',
-        '<div class="row"><span class="badge ' + badgeTone(stateText) + '">' + esc(stateText) + '</span><span class="muted">' + esc(fmt((state.currentThread && state.currentThread.updatedAt) || state.refreshedAt, false)) + '</span></div>',
+        '<div class="muted">' + esc(fmt((state.currentThread && state.currentThread.updatedAt) || state.refreshedAt, false)) + '</div>',
         '<div class="muted">' + esc(activity) + '</div>',
       ].join('');
     }
@@ -1947,9 +2011,6 @@ function renderThreadPanelHtml(nonce: string): string {
       const items = [];
       if (state.errorMessage) {
         items.push('<section class="notice error"><div class="title small">오류</div><div class="muted">' + esc(state.errorMessage) + '</div></section>');
-      }
-      if (state.statusMessage) {
-        items.push('<section class="notice info"><div class="title small">상태</div><div class="muted">' + esc(state.statusMessage) + '</div></section>');
       }
       if (!state.adapter.ready && !state.errorMessage) {
         items.push('<section class="notice"><div class="title small">연결 준비</div><div class="muted">agent가 아직 응답하지 않으면 ' + esc(state.agentBaseUrl) + ' 주소와 vibedeck_doctor.ps1 결과를 먼저 확인하세요.</div></section>');
@@ -1973,7 +2034,7 @@ function renderThreadPanelHtml(nonce: string): string {
       }
       return threads.map(function(thread) {
         const active = !state.composeMode && thread.id === state.selectedThreadId;
-        return '<button class="thread ' + (active ? 'active' : '') + '" data-action="select-thread" data-thread-id="' + attr(thread.id) + '"><div class="head"><div class="thread-title">' + esc(thread.title || thread.id) + '</div><span class="badge ' + badgeTone(thread.state) + '">' + esc(thread.state || '-') + '</span></div><div class="thread-meta"><span>' + esc(fmt(thread.updatedAt, false)) + '</span><span>' + esc(thread.lastEventKind || '-') + '</span></div><div class="thread-body">' + esc(thread.lastEventText || '아직 기록이 없습니다.') + '</div></button>';
+        return '<button class="thread ' + (active ? 'active' : '') + '" data-action="select-thread" data-thread-id="' + attr(thread.id) + '"><div class="head"><div class="thread-title">' + esc(thread.title || thread.id) + '</div><span class="muted">' + esc(fmt(thread.updatedAt, false)) + '</span></div><div class="thread-meta"><span class="thread-state">' + esc(thread.state || '-') + '</span></div><div class="thread-body">' + esc(compactThreadPreview(thread)) + '</div></button>';
       }).join('');
     }
 
@@ -1994,25 +2055,26 @@ function renderThreadPanelHtml(nonce: string): string {
       const activeFilePath = state.live.workspace.activeFilePath || state.live.focus.activeFilePath || '';
       const terminalStatus = state.live.terminal.status || state.derived.runStatus || '';
       const changedCount = state.live.workspace.changedFiles.length || state.derived.currentJobFiles.length || 0;
-      const participants = state.live.participants.length;
+      const meta = [];
+      if (activeFilePath) {
+        meta.push('<span>현재 파일 · ' + esc(activeFilePath) + '</span>');
+      }
+      if (terminalStatus) {
+        meta.push('<span>실행 · ' + esc(terminalStatus) + '</span>');
+      }
+      if (changedCount) {
+        meta.push('<span>변경 파일 · ' + esc(String(changedCount)) + '</span>');
+      }
       return [
         '<div class="session-bar">',
         '  <div class="session-main">',
         '    <div class="stack">',
-        '      <div class="eyebrow">공유 세션</div>',
         '      <div class="session-title">' + esc(title) + '</div>',
         '      <div class="session-summary">' + esc(summary) + '</div>',
         '    </div>',
         '    <span class="badge ' + badgeTone(state.operation.phase || (state.currentThread && state.currentThread.state) || '-') + '">' + esc(state.operation.phase || ((state.currentThread && state.currentThread.state) || '-')) + '</span>',
         '  </div>',
-        '  <div class="row">',
-        '    <span class="pill ' + (state.adapter.ready ? 'ok' : 'bad') + '">브리지 ' + esc(state.adapter.name || '-') + '</span>',
-        (activeFilePath ? '<span class="pill focus">포커스 ' + esc(activeFilePath) + '</span>' : ''),
-        (terminalStatus ? '<span class="pill">실행 ' + esc(terminalStatus) + '</span>' : ''),
-        (changedCount ? '<span class="pill">변경 ' + esc(String(changedCount)) + '</span>' : ''),
-        (participants ? '<span class="pill">참여 ' + esc(String(participants)) + '</span>' : ''),
-        '    <span class="pill">업데이트 ' + esc(fmt((state.currentThread && state.currentThread.updatedAt) || state.refreshedAt, false)) + '</span>',
-        '  </div>',
+        (meta.length ? '  <div class="session-meta">' + meta.join('') + '</div>' : ''),
         '</div>',
       ].join('');
     }
@@ -2020,15 +2082,13 @@ function renderThreadPanelHtml(nonce: string): string {
     function renderComposer(promptValue) {
       return [
         '<div class="composer-shell">',
-        '<div class="section-head"><div><div class="title">메시지</div><div class="muted">현재 세션에 다음 작업을 바로 보냅니다.</div></div><span class="badge">' + esc(state.composeMode ? '새 세션' : '현재 세션') + '</span></div>',
+        '<div class="section-head"><div><div class="title">메시지</div><div class="muted">필요한 요청만 적고 바로 보내세요.</div></div><span class="badge">' + esc(state.composeMode ? '새 세션' : '현재 세션') + '</span></div>',
         '<textarea id="prompt-input" placeholder="예: src/hello.py 파일에 간단한 스크립트를 추가해줘">' + esc(promptValue) + '</textarea>',
         '<div class="composer-actions">',
         '  <button class="primary" data-action="submit-prompt">전송</button>',
-        '  <select id="run-profile-select">' + renderRunProfiles() + '</select>',
-        '  <button class="secondary" data-action="run-profile"' + (state.currentJobId && selectedRunProfileId ? '' : ' disabled') + '>실행</button>',
-        '  <button data-action="apply-patch"' + (state.currentJobId && state.derived.patchFiles.length ? '' : ' disabled') + '>패치 적용</button>',
+        '  <span class="utility-hint">변경사항과 실행 결과는 대화 안에서 바로 보여줍니다.</span>',
         '</div>',
-        '<details><summary>컨텍스트 옵션</summary><div class="checkbox-grid">',
+        '<details><summary>고급 옵션</summary><div class="checkbox-grid">',
         renderCheckbox('includeActiveFile', '현재 파일', contextOptions.includeActiveFile),
         renderCheckbox('includeSelection', '선택 영역', contextOptions.includeSelection),
         renderCheckbox('includeLatestError', '최근 오류', contextOptions.includeLatestError),
@@ -2041,16 +2101,10 @@ function renderThreadPanelHtml(nonce: string): string {
     function renderHighlights() {
       const items = [];
       if (state.live.reasoning.summary) {
-        items.push('<div class="summary-card"><div class="list-label">판단</div><strong>' + esc(state.live.reasoning.title || '현재 판단') + '</strong><div class="muted">' + esc(state.live.reasoning.summary) + '</div></div>');
+        items.push('<div class="summary-card"><div class="list-label">현재 요약</div><strong>' + esc(state.live.reasoning.title || '현재 판단') + '</strong><div class="muted">' + esc(state.live.reasoning.summary) + '</div></div>');
       }
       if (state.live.plan.summary || (state.live.plan.items && state.live.plan.items.length)) {
-        items.push('<div class="summary-card"><div class="list-label">계획</div><strong>' + esc(state.live.plan.summary || '작업 단계') + '</strong><div class="mini-list">' + state.live.plan.items.slice(0, 3).map(function(item) { return '<div class="muted">[' + esc(item.status || '-') + '] ' + esc(item.label || item.detail || '-') + '</div>'; }).join('') + '</div></div>');
-      }
-      if (state.live.tools.currentLabel || (state.live.tools.activities && state.live.tools.activities.length)) {
-        items.push('<div class="summary-card"><div class="list-label">도구 활동</div><strong>' + esc(state.live.tools.currentLabel || '최근 도구') + '</strong><div class="mini-list">' + state.live.tools.activities.slice(0, 3).map(function(item) { return '<div class="muted">' + esc(item.label || item.kind || '-') + ' · ' + esc(item.status || '-') + '</div>'; }).join('') + '</div></div>');
-      }
-      if (state.live.composer.draftText && !state.composeMode) {
-        items.push('<div class="summary-card"><div class="list-label">공유 draft</div><pre>' + esc(state.live.composer.draftText) + '</pre></div>');
+        items.push('<div class="summary-card"><div class="list-label">다음 단계</div><strong>' + esc(state.live.plan.summary || '작업 단계') + '</strong><div class="mini-list">' + state.live.plan.items.slice(0, 3).map(function(item) { return '<div class="muted">[' + esc(item.status || '-') + '] ' + esc(item.label || item.detail || '-') + '</div>'; }).join('') + '</div></div>');
       }
       if (!items.length) {
         return '';
@@ -2061,11 +2115,10 @@ function renderThreadPanelHtml(nonce: string): string {
     function renderReview() {
       const items = [
         '<div class="row">',
-          '  <span class="pill">작업 ' + esc(state.currentJobId || '-') + '</span>',
           '  <span class="pill">패치 ' + esc(state.derived.patchSummary || state.operation.patchSummary || '-') + '</span>',
           (state.derived.patchResultStatus || state.derived.patchResultMessage ? '<span class="pill ' + (String(state.derived.patchResultStatus || '').toLowerCase() === 'failed' ? 'bad' : 'ok') + '">적용 ' + esc(state.derived.patchResultStatus || '-') + '</span>' : ''),
         '</div>',
-        '<div class="row"><button data-action="apply-patch"' + (state.currentJobId && state.derived.patchFiles.length ? '' : ' disabled') + '>패치 적용</button><button class="secondary" data-action="run-profile"' + (state.currentJobId && selectedRunProfileId ? '' : ' disabled') + '>실행</button></div>',
+        '<div class="row"><button data-action="apply-patch"' + (state.currentJobId && state.derived.patchFiles.length ? '' : ' disabled') + '>패치 적용</button></div>',
       ];
       if (state.derived.patchResultMessage) {
         items.push('<div class="muted">' + esc(state.derived.patchResultMessage) + '</div>');
@@ -2087,6 +2140,7 @@ function renderThreadPanelHtml(nonce: string): string {
       const output = state.live.terminal.output || state.live.terminal.excerpt || state.derived.runOutput || state.derived.runExcerpt || '';
       const changedFiles = state.live.workspace.changedFiles.length ? state.live.workspace.changedFiles : state.derived.currentJobFiles;
       const items = [
+        '<div class="row"><select id="run-profile-select">' + renderRunProfiles() + '</select><button class="secondary" data-action="run-profile"' + (state.currentJobId && selectedRunProfileId ? '' : ' disabled') + '>실행</button></div>',
         '<div class="row">',
         '  <span class="pill ' + (String(status).toLowerCase() === 'passed' ? 'ok' : (String(status).toLowerCase() === 'failed' ? 'bad' : '')) + '">상태 ' + esc(status) + '</span>',
         (state.live.terminal.profileId || state.derived.runProfileId ? '<span class="pill">프로파일 ' + esc(state.live.terminal.profileId || state.derived.runProfileId) + '</span>' : ''),
@@ -2145,23 +2199,233 @@ function renderThreadPanelHtml(nonce: string): string {
     }
 
     function renderTimeline() {
-      if (!state.events.length) {
+      const events = state.events.filter(function(item) { return shouldShowPrimaryEvent(item); });
+      if (!events.length) {
         return '<div class="empty">아직 대화와 작업 로그가 없습니다.</div>';
       }
-      return '<div class="timeline">' + state.events.map(function(item) {
+      return '<div class="timeline">' + events.map(function(item) {
         const role = normalizedRole(item);
-        const kindLabel = describeKind(item.kind);
-        const content = item.body || item.title || kindLabel;
-        const showTitle = Boolean(item.title && item.body && item.title !== item.body);
+        const headline = eventHeadline(item, role);
+        const content = eventBody(item, headline);
+        const attachment = renderEventAttachment(item);
         const chips = [];
-        if (item.kind) {
-          chips.push('<span class="badge ' + badgeTone(item.kind) + '">' + esc(kindLabel) + '</span>');
+        if (item.data && item.data.status) {
+          chips.push('<span class="badge ' + badgeTone(item.data.status) + '">' + esc(String(item.data.status)) + '</span>');
         }
-        if (item.jobId) {
-          chips.push('<span class="badge">작업 ' + esc(item.jobId) + '</span>');
-        }
-        return '<article class="message ' + role + '"><div class="message-meta"><div class="message-author"><span class="avatar">' + esc(roleGlyph(role)) + '</span><div><div class="message-label">' + esc(roleLabel(role)) + '</div><div class="message-sub">' + esc(fmt(item.at, true)) + '</div></div></div><div class="message-chips">' + chips.join('') + '</div></div>' + (showTitle ? '<div class="message-title">' + esc(item.title) + '</div>' : '') + '<div class="message-body">' + nl2br(content) + '</div></article>';
+        return '<article class="message ' + role + '"><div class="message-meta"><div class="message-author"><span class="avatar">' + esc(roleGlyph(role)) + '</span><div><div class="message-label">' + esc(roleLabel(role)) + '</div><div class="message-sub">' + esc(fmt(item.at, true)) + '</div></div></div><div class="message-chips">' + chips.join('') + '</div></div>' + (headline ? '<div class="message-title">' + esc(headline) + '</div>' : '') + (content ? '<div class="message-body">' + nl2br(content) + '</div>' : '') + attachment + '</article>';
       }).join('') + '</div>';
+    }
+
+    function compactThreadPreview(thread) {
+      const preview = String(thread.lastEventText || state.live.activity.summary || '').trim();
+      if (preview) {
+        return preview;
+      }
+      return '아직 기록이 없습니다.';
+    }
+
+    function shouldShowPrimaryEvent(item) {
+      const kind = String(item.kind || '').toLowerCase();
+      return ![
+        'prompt_accepted',
+        'tool_activity',
+        'patch_apply',
+        'run_profile',
+        'session_event',
+        'live_state',
+        'status',
+        'reasoning',
+        'plan',
+      ].includes(kind);
+    }
+
+    function eventHeadline(item, role) {
+      const kind = String(item.kind || '').toLowerCase();
+      if (role === 'user') {
+        return '';
+      }
+      if (role === 'assistant' && ['assistant_message', 'assistant_response', 'provider_message', 'user_prompt', 'prompt_submit', 'prompt_submitted'].includes(kind)) {
+        return '';
+      }
+      if (kind === 'patch_ready') {
+        return '변경 제안';
+      }
+      if (kind === 'patch_applied' || kind === 'patch_result') {
+        return '패치 적용 결과';
+      }
+      if (kind === 'run_finished' || kind === 'run_result') {
+        return '실행 결과';
+      }
+      if (kind === 'error') {
+        return '오류';
+      }
+      return item.title || describeKind(item.kind);
+    }
+
+    function eventBody(item, headline) {
+      const kind = String(item.kind || '').toLowerCase();
+      const summary = item.data && item.data.summary != null ? String(item.data.summary) : '';
+      const message = item.data && item.data.message != null ? String(item.data.message) : '';
+      const excerpt = item.data && item.data.excerpt != null ? String(item.data.excerpt) : '';
+      if (kind === 'patch_ready') {
+        return summary || item.body || '';
+      }
+      if (kind === 'patch_applied' || kind === 'patch_result') {
+        return item.body || message || '';
+      }
+      if (kind === 'run_finished' || kind === 'run_result') {
+        return summary || item.body || excerpt || '';
+      }
+      const raw = item.body || '';
+      if (raw && raw !== headline) {
+        return raw;
+      }
+      return '';
+    }
+
+    function renderEventAttachment(item) {
+      const kind = String(item.kind || '').toLowerCase();
+      if (kind === 'patch_ready') {
+        const files = extractPatchFiles(item);
+        return files.length ? renderChangeCard(files) : '';
+      }
+      if (kind === 'patch_applied' || kind === 'patch_result') {
+        return renderPatchResultCard(item);
+      }
+      if (kind === 'run_finished' || kind === 'run_result') {
+        return renderRunResultCard(item);
+      }
+      return '';
+    }
+
+    function renderChangeCard(files) {
+      const stats = aggregatePatchStats(files);
+      const preview = renderPatchPreview(files[0]);
+      return [
+        '<section class="change-card">',
+        '  <div class="change-card-header">',
+        '    <div class="change-card-title">' + esc(files.length + '개 파일 변경됨') + '</div>',
+        '    <div class="change-card-delta"><span class="delta-plus">+' + esc(String(stats.added)) + '</span><span class="delta-minus">-' + esc(String(stats.removed)) + '</span></div>',
+        '  </div>',
+        '  <div class="change-file-list">' + files.map(function(file) {
+          const fileStats = patchFileStats(file);
+          return '<div class="change-file-row"><div class="change-file-name">' + esc(file.path || '-') + '</div><div class="change-file-stats"><span class="delta-plus">+' + esc(String(fileStats.added)) + '</span><span class="delta-minus">-' + esc(String(fileStats.removed)) + '</span></div></div>';
+        }).join('') + '</div>',
+        preview,
+        '  <div class="change-actions"><button class="secondary" data-action="apply-patch"' + (state.currentJobId && files.length ? '' : ' disabled') + '>변경 반영</button>' + renderRunAction() + '</div>',
+        '</section>',
+      ].join('');
+    }
+
+    function renderPatchResultCard(item) {
+      const status = String((item.data && item.data.status) || state.derived.patchResultStatus || '-');
+      const message = String((item.data && item.data.message) || state.derived.patchResultMessage || item.body || '');
+      return [
+        '<section class="change-card">',
+        '  <div class="change-card-header">',
+        '    <div class="change-card-title">변경 반영 결과</div>',
+        '    <div class="change-card-delta"><span class="' + (status.toLowerCase() === 'failed' ? 'delta-minus' : 'delta-plus') + '">' + esc(status) + '</span></div>',
+        '  </div>',
+        '  <div class="change-file-list"><div class="change-file-row"><div class="change-file-name">' + esc(message || '결과 메시지가 없습니다.') + '</div></div></div>',
+        '  <div class="change-actions">' + renderRunAction() + '</div>',
+        '</section>',
+      ].join('');
+    }
+
+    function renderRunResultCard(item) {
+      const changedFiles = normalizeStringList((item.data && item.data.changedFiles) || state.derived.currentJobFiles);
+      const status = String((item.data && item.data.status) || state.derived.runStatus || '-');
+      const summary = String((item.data && item.data.summary) || state.derived.runSummary || item.body || '');
+      const rows = [];
+      if (changedFiles.length) {
+        rows.push.apply(rows, changedFiles.map(function(path) {
+          return '<div class="change-file-row"><div class="change-file-name">' + esc(path) + '</div><div class="change-file-stats"><span class="delta-plus">changed</span></div></div>';
+        }));
+      } else if (summary) {
+        rows.push('<div class="change-file-row"><div class="change-file-name">' + esc(summary) + '</div></div>');
+      }
+      return [
+        '<section class="change-card">',
+        '  <div class="change-card-header">',
+        '    <div class="change-card-title">실행 결과</div>',
+        '    <div class="change-card-delta"><span class="' + (status.toLowerCase() === 'failed' ? 'delta-minus' : 'delta-plus') + '">' + esc(status) + '</span></div>',
+        '  </div>',
+        '  <div class="change-file-list">' + rows.join('') + '</div>',
+        '</section>',
+      ].join('');
+    }
+
+    function renderRunAction() {
+      return '<button data-action="run-profile"' + (state.currentJobId && selectedRunProfileId ? '' : ' disabled') + '>실행</button>';
+    }
+
+    function normalizeStringList(value) {
+      if (Array.isArray(value)) {
+        return value.filter(function(item) { return typeof item === 'string' && item.trim().length > 0; });
+      }
+      if (typeof value === 'string' && value.trim().length > 0) {
+        return [value.trim()];
+      }
+      return [];
+    }
+
+    function extractPatchFiles(item) {
+      const eventFiles = Array.isArray(item.data && item.data.files) ? item.data.files : [];
+      if (eventFiles.length) {
+        return eventFiles;
+      }
+      return Array.isArray(state.derived.patchFiles) ? state.derived.patchFiles : [];
+    }
+
+    function renderPatchPreview(file) {
+      if (!file || !Array.isArray(file.hunks) || !file.hunks.length) {
+        return '';
+      }
+      const previewLines = String(file.hunks[0].diff || '')
+        .split(/\\r?\\n/)
+        .filter(function(line) { return line.trim().length > 0; })
+        .slice(0, 8)
+        .join('\\n');
+      if (!previewLines) {
+        return '';
+      }
+      const stats = patchFileStats(file);
+      return [
+        '<div class="change-preview">',
+        '  <div class="change-preview-head"><div class="change-preview-title">' + esc(file.path || '-') + '</div><div class="change-card-delta"><span class="delta-plus">+' + esc(String(stats.added)) + '</span><span class="delta-minus">-' + esc(String(stats.removed)) + '</span></div></div>',
+        '  <div class="change-preview-body">' + esc(previewLines) + '</div>',
+        '</div>',
+      ].join('');
+    }
+
+    function aggregatePatchStats(files) {
+      return files.reduce(function(acc, file) {
+        const stats = patchFileStats(file);
+        acc.added += stats.added;
+        acc.removed += stats.removed;
+        return acc;
+      }, { added: 0, removed: 0 });
+    }
+
+    function patchFileStats(file) {
+      const hunks = Array.isArray(file && file.hunks) ? file.hunks : [];
+      let added = 0;
+      let removed = 0;
+      hunks.forEach(function(hunk) {
+        String((hunk && hunk.diff) || '').split(/\\r?\\n/).forEach(function(line) {
+          if (line.startsWith('+++') || line.startsWith('---')) {
+            return;
+          }
+          if (line.startsWith('+')) {
+            added += 1;
+            return;
+          }
+          if (line.startsWith('-')) {
+            removed += 1;
+          }
+        });
+      });
+      return { added: added, removed: removed };
     }
 
     function normalizedRole(item) {

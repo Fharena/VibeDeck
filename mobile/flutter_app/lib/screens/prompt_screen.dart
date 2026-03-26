@@ -207,6 +207,10 @@ class _PromptScreenState extends State<PromptScreen> {
             ? widget.controller.liveDraftPreview
             : widget.controller.promptDraft;
 
+        final primaryFeedEvents = widget.controller.threadEvents
+            .where(_shouldShowPrimaryFeedEvent)
+            .toList();
+
         return Column(
           key: const ValueKey('session-screen'),
           children: [
@@ -233,11 +237,11 @@ class _PromptScreenState extends State<PromptScreen> {
                   ),
                   const SizedBox(height: 14),
                   _SectionCard(
-                    title: '작업 로그',
-                    subtitle: '프롬프트, 패치, 실행 결과를 한 피드에서 읽습니다.',
-                    child: widget.controller.threadEvents.isEmpty
+                    title: '대화와 결과',
+                    subtitle: '요청, 응답, 검토 결과만 기본 피드에 남깁니다.',
+                    child: primaryFeedEvents.isEmpty
                         ? Text(
-                            '아직 세션 이벤트가 없습니다. 아래 composer에서 첫 요청을 보내면 피드가 시작됩니다.',
+                            '아직 표시할 대화가 없습니다. 아래 composer에서 첫 요청을 보내면 피드가 시작됩니다.',
                             style: Theme.of(context)
                                 .textTheme
                                 .bodyMedium
@@ -247,7 +251,7 @@ class _PromptScreenState extends State<PromptScreen> {
                                 ),
                           )
                         : Column(
-                            children: widget.controller.threadEvents
+                            children: primaryFeedEvents
                                 .map((event) => _ThreadEventTile(event: event))
                                 .toList(),
                           ),
@@ -793,8 +797,6 @@ class _WorkstreamCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final reasoning = controller.liveSession.reasoning.summary.trim();
     final planItems = controller.liveSession.plan.items.take(4).toList();
-    final toolActivities =
-        controller.liveSession.tools.activities.reversed.take(3).toList();
     final primaryProfile =
         controller.runProfiles.isEmpty ? null : controller.runProfiles.first;
     final primaryProfileLabel = primaryProfile == null
@@ -872,60 +874,24 @@ class _WorkstreamCard extends StatelessWidget {
               tone: const Color(0xFF4E8DFF),
             ),
           ],
-          if (reasoning.isNotEmpty) ...[
+          if (reasoning.isNotEmpty || planItems.isNotEmpty) ...[
             const SizedBox(height: 12),
             _StreamSurface(
-              label: '판단 요약',
-              child: Text(
-                reasoning,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: const Color(0xFFDCE6F2),
-                      height: 1.45,
-                    ),
-              ),
-            ),
-          ],
-          if (planItems.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            _StreamSurface(
-              label: '계획',
-              child: _PlanTrace(items: planItems),
-            ),
-          ],
-          if (controller.liveSession.tools.currentLabel.trim().isNotEmpty ||
-              toolActivities.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            _StreamSurface(
-              label: '작업 로그',
+              label: '현재 요약',
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (controller.liveSession.tools.currentLabel
-                      .trim()
-                      .isNotEmpty)
+                  if (reasoning.isNotEmpty)
                     Text(
-                      '${controller.liveSession.tools.currentLabel} / ${controller.liveSession.tools.currentStatus.isEmpty ? '진행 중' : controller.liveSession.tools.currentStatus}',
+                      reasoning,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: const Color(0xFFF4F7FB),
-                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFFDCE6F2),
+                            height: 1.45,
                           ),
                     ),
-                  if (toolActivities.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    ...toolActivities.map(
-                      (activity) => Padding(
-                        padding: const EdgeInsets.only(bottom: 6),
-                        child: Text(
-                          '- ${activity.label.isEmpty ? activity.kind : activity.label}${activity.status.isEmpty ? '' : ' / ${activity.status}'}${activity.detail.isEmpty ? '' : ' / ${activity.detail}'}',
-                          style:
-                              Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: const Color(0xFFB7C4D2),
-                                    height: 1.35,
-                                  ),
-                        ),
-                      ),
-                    ),
-                  ],
+                  if (reasoning.isNotEmpty && planItems.isNotEmpty)
+                    const SizedBox(height: 10),
+                  if (planItems.isNotEmpty) _PlanTrace(items: planItems),
                 ],
               ),
             ),
@@ -1016,20 +982,6 @@ class _WorkstreamCard extends StatelessWidget {
               ],
             ),
           ),
-          if (controller.errorMessage != null) ...[
-            const SizedBox(height: 12),
-            _StreamSurface(
-              label: '최근 오류',
-              accent: Theme.of(context).colorScheme.error,
-              child: Text(
-                controller.errorMessage!,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: const Color(0xFFFFD5D2),
-                      height: 1.45,
-                    ),
-              ),
-            ),
-          ],
         ],
       ),
     );
@@ -2260,32 +2212,13 @@ class _ThreadEventTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isUser = event.role == 'user';
+    final title = _primaryFeedEventTitle(event);
+    final body = _primaryFeedEventBody(event, title);
     final bgColor = isUser ? const Color(0xFF13222A) : const Color(0xFF151E2A);
     final borderColor =
         isUser ? const Color(0xFF244653) : const Color(0xFF263449);
     final iconColor =
         isUser ? const Color(0xFF7FD0B4) : const Color(0xFFB8C7FF);
-    final eventCommand = _firstNonEmptyText([
-      event.data['command']?.toString() ?? '',
-      event.data['label']?.toString() ?? '',
-    ]);
-    final eventOutputPreview = _terminalOutputPreview(_firstNonEmptyText([
-      event.data['output']?.toString() ?? '',
-      event.data['excerpt']?.toString() ?? '',
-    ]));
-    final eventErrors = event.data['topErrors'] is List
-        ? (event.data['topErrors'] as List)
-            .whereType<Map>()
-            .map((item) {
-              final path = item['path']?.toString() ?? '';
-              final line = item['line']?.toString() ?? '';
-              final message = item['message']?.toString() ?? '';
-              return path.isEmpty ? message : '$path:$line $message'.trim();
-            })
-            .where((line) => line.trim().isNotEmpty)
-            .take(2)
-            .toList()
-        : const <String>[];
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -2308,7 +2241,7 @@ class _ThreadEventTile extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  event.title,
+                  title,
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
                         color: const Color(0xFFF4F7FB),
                       ),
@@ -2322,10 +2255,10 @@ class _ThreadEventTile extends StatelessWidget {
               ),
             ],
           ),
-          if (event.body.isNotEmpty) ...[
+          if (body.isNotEmpty) ...[
             const SizedBox(height: 8),
             Text(
-              event.body,
+              body,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: const Color(0xFFDCE6F2),
                     height: 1.45,
@@ -2354,53 +2287,8 @@ class _ThreadEventTile extends StatelessWidget {
                   _MetricPill(
                     icon: Icons.description_outlined,
                     label: '파일 ${event.data['fileCount']}개',
-                  ),
-              ],
-            ),
-          ],
-          if (eventCommand.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: const Color(0xFF0D141B),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFF202A35)),
-              ),
-              child: SelectableText(
-                eventCommand,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: const Color(0xFFEAF1F8),
-                      fontFamily: 'monospace',
-                      height: 1.4,
-                    ),
-              ),
-            ),
-          ],
-          if (eventOutputPreview.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Text(
-              eventOutputPreview,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: const Color(0xFFB7C4D2),
-                    height: 1.4,
-                  ),
-            ),
-          ],
-          if (eventErrors.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            ...eventErrors.map(
-              (line) => Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Text(
-                  '• $line',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: const Color(0xFFFFD5D2),
-                        height: 1.35,
-                      ),
                 ),
-              ),
+              ],
             ),
           ],
         ],
@@ -2408,6 +2296,75 @@ class _ThreadEventTile extends StatelessWidget {
     );
   }
 }
+
+bool _shouldShowPrimaryFeedEvent(ThreadEventView event) {
+  switch (_normalizedFeedEventKind(event.kind)) {
+    case 'prompt_accepted':
+    case 'tool_activity':
+    case 'patch_apply':
+    case 'run_profile':
+    case 'session_event':
+    case 'live_state':
+    case 'status':
+    case 'reasoning':
+    case 'plan':
+      return false;
+    default:
+      return true;
+  }
+}
+
+String _primaryFeedEventTitle(ThreadEventView event) {
+  final kind = _normalizedFeedEventKind(event.kind);
+  if (event.role == 'user') {
+    return '요청';
+  }
+  switch (kind) {
+    case 'patch_ready':
+      return '변경 제안';
+    case 'patch_applied':
+    case 'patch_result':
+      return '패치 적용 결과';
+    case 'run_finished':
+    case 'run_result':
+      return '실행 결과';
+    case 'error':
+      return '오류';
+    default:
+      return '응답';
+  }
+}
+
+String _primaryFeedEventBody(ThreadEventView event, String title) {
+  final kind = _normalizedFeedEventKind(event.kind);
+  switch (kind) {
+    case 'patch_ready':
+      return _firstNonEmptyText([
+        event.data['summary']?.toString() ?? '',
+        event.body,
+      ]);
+    case 'patch_applied':
+    case 'patch_result':
+      return _firstNonEmptyText([
+        event.body,
+        event.data['message']?.toString() ?? '',
+      ]);
+    case 'run_finished':
+    case 'run_result':
+      return _firstNonEmptyText([
+        event.data['summary']?.toString() ?? '',
+        event.body,
+        event.data['excerpt']?.toString() ?? '',
+      ]);
+    default:
+      if (event.body == title) {
+        return '';
+      }
+      return event.body;
+  }
+}
+
+String _normalizedFeedEventKind(String kind) => kind.trim().toLowerCase();
 
 class _MetricChip extends StatelessWidget {
   const _MetricChip({required this.label, required this.value});

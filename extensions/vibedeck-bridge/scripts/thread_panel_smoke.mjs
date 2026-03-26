@@ -413,9 +413,10 @@ try {
   await fakeVscode.commands.executeCommand("vibedeckBridge.openThreadPanel");
   await tick();
 
-  assert.match(fakeView.webview.html, /VibeDeck 세션/);
-  assert.match(fakeView.webview.html, /대화/);
-  assert.match(fakeView.webview.html, /파일과 포커스/);
+  assert.match(fakeView.webview.html, /세션/);
+  assert.match(fakeView.webview.html, /새 세션/);
+  assert.match(fakeView.webview.html, /메시지/);
+  assert.match(fakeView.webview.html, /변경 반영/);
   assert.equal(fakeView.webview.options.enableScripts, true);
   const embeddedScript = fakeView.webview.html.match(/<script nonce="[^"]*">([\s\S]*)<\/script>/)?.[1] ?? "";
   assert.ok(embeddedScript, "thread panel html should include inline webview script");
