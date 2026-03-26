@@ -1670,21 +1670,21 @@ function renderThreadPanelHtml(nonce: string): string {
     .topbar-title { font-size: 16px; font-weight: 700; line-height: 1.35; color: #f4f7fb; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .topbar-subtitle { color: var(--muted); font-size: 12px; line-height: 1.5; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden; }
     .topbar-actions { display: flex; gap: 8px; align-items: center; }
-    .toolbar-button { border-radius: 999px; padding: 8px 12px; background: #11151c; border: 1px solid var(--line-soft); color: #dfe6f7; font-size: 12px; }
-    .toolbar-button.active { border-color: rgba(124, 184, 255, 0.35); background: rgba(47, 69, 99, 0.34); }
+    .toolbar-button { border-radius: 8px; padding: 8px 12px; background: #11151c; border: 1px solid var(--line-soft); color: #dfe6f7; font-size: 12px; }
+    .toolbar-button.active { border-color: rgba(124, 184, 255, 0.35); background: #1a2230; }
     .sidebar { padding: 16px 14px; border-right: 1px solid var(--line); background: linear-gradient(180deg, #0b0e14 0%, var(--sidebar) 100%); display: grid; gap: 12px; align-content: start; }
     .main { padding: 14px 16px; display: grid; gap: 12px; align-content: start; min-width: 0; }
     .workspace-shell { display: grid; gap: 12px; align-items: start; }
     .chat-shell { display: grid; gap: 12px; min-width: 0; }
-    .card { border: 1px solid var(--line); border-radius: 16px; background: linear-gradient(180deg, rgba(27, 31, 39, 0.96) 0%, rgba(20, 24, 31, 0.98) 100%); padding: 14px; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.18); }
-    .card.flat { background: rgba(22, 26, 33, 0.94); box-shadow: none; }
+    .card { border: 1px solid var(--line); border-radius: 12px; background: #151a21; padding: 14px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14); }
+    .card.flat { background: #151a21; box-shadow: none; }
     .stack { display: grid; gap: 12px; }
     .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
     .spread { justify-content: space-between; }
     .threads, .files, .errors, .mini-list, .path-list, .timeline, .summary-strip { display: grid; gap: 10px; }
     .sidebar-top { display: grid; gap: 10px; }
-    .thread { width: 100%; text-align: left; padding: 12px; border-radius: 14px; background: #12161d; }
-    .thread.active { border-color: #406186; background: rgba(47, 69, 99, 0.38); box-shadow: inset 0 0 0 1px rgba(124, 184, 255, 0.18); }
+    .thread { width: 100%; text-align: left; padding: 12px; border-radius: 10px; background: #12161d; }
+    .thread.active { border-color: #406186; background: #182231; box-shadow: inset 0 0 0 1px rgba(124, 184, 255, 0.12); }
     .thread .thread-title { font-size: 13px; font-weight: 600; line-height: 1.45; }
     .thread .thread-meta { display: flex; justify-content: space-between; gap: 8px; margin-top: 8px; color: var(--muted); font-size: 11px; }
     .thread .thread-state { color: #b9c6d8; font-size: 11px; }
@@ -1695,12 +1695,12 @@ function renderThreadPanelHtml(nonce: string): string {
     .title.small { font-size: 14px; }
     .section-head { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
     .section-head .title { font-size: 13px; }
-    .pill { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px; border: 1px solid var(--line-soft); background: #11151c; color: var(--muted); font-size: 12px; }
+    .pill { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line-soft); background: #11151c; color: var(--muted); font-size: 12px; }
     .pill.ok { color: var(--ok); }
     .pill.bad { color: var(--bad); }
     .pill.warn { color: var(--warn); }
     .pill.focus { color: var(--focus); }
-    .badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 999px; border: 1px solid var(--line-soft); background: #11151c; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 8px; border: 1px solid var(--line-soft); background: #11151c; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
     .badge.ok { color: var(--ok); }
     .badge.bad { color: var(--bad); }
     .badge.warn { color: var(--warn); }
@@ -1711,16 +1711,16 @@ function renderThreadPanelHtml(nonce: string): string {
     .checkbox { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
     .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .summary-strip { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
-    .summary-card, .mini-card { border: 1px solid var(--line-soft); border-radius: 14px; padding: 12px; background: #121720; min-width: 0; }
+    .summary-card, .mini-card { border: 1px solid var(--line-soft); border-radius: 10px; padding: 12px; background: #121720; min-width: 0; }
     .summary-card strong, .mini-card strong { display: block; margin-top: 4px; font-size: 13px; }
     .summary-card { background: linear-gradient(180deg, rgba(27, 32, 40, 0.98) 0%, rgba(19, 23, 30, 0.98) 100%); }
     .list-label { color: var(--muted); font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; }
-    .file, .error { border: 1px solid var(--line-soft); border-radius: 14px; padding: 12px; background: #121720; }
+    .file, .error { border: 1px solid var(--line-soft); border-radius: 10px; padding: 12px; background: #121720; }
     .head { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 6px; align-items: flex-start; }
     .path-button { width: 100%; text-align: left; background: #11151c; font-family: var(--font-mono); font-size: 12px; }
     .empty { padding: 14px; border: 1px dashed var(--line); border-radius: 12px; color: var(--muted); background: #11151c; }
     .banner { display: grid; gap: 8px; }
-    .notice { border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; background: rgba(25, 29, 37, 0.96); }
+    .notice { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; background: #171c24; }
     .notice.error { border-color: rgba(255, 143, 147, 0.38); }
     .notice.info { border-color: rgba(124, 184, 255, 0.32); }
     .session-bar { display: grid; gap: 10px; }
@@ -1731,13 +1731,13 @@ function renderThreadPanelHtml(nonce: string): string {
     .chat-panel { display: grid; gap: 12px; }
     .timeline-card { min-height: 420px; }
     .timeline { align-content: start; }
-    .message { border: 1px solid var(--line-soft); border-radius: 16px; padding: 12px 14px; background: #141922; display: grid; gap: 10px; }
-    .message.user { margin-left: 46px; background: linear-gradient(180deg, rgba(34, 46, 63, 0.96) 0%, rgba(24, 35, 50, 0.98) 100%); border-color: rgba(105, 149, 206, 0.32); }
-    .message.assistant { margin-right: 46px; background: linear-gradient(180deg, rgba(26, 30, 38, 0.98) 0%, rgba(19, 23, 30, 0.98) 100%); }
-    .message.system { background: linear-gradient(180deg, rgba(23, 27, 34, 0.98) 0%, rgba(17, 21, 28, 0.98) 100%); border-style: dashed; }
+    .message { border: 1px solid var(--line-soft); border-radius: 10px; padding: 12px 14px; background: #141922; display: grid; gap: 10px; }
+    .message.user { margin-left: 38px; background: #182130; border-color: rgba(105, 149, 206, 0.28); }
+    .message.assistant { margin-right: 38px; background: #151920; }
+    .message.system { background: #14181f; border-style: dashed; }
     .message-meta { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
     .message-author { display: flex; gap: 10px; align-items: flex-start; }
-    .avatar { width: 24px; height: 24px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; background: #0f131b; border: 1px solid var(--line-soft); color: var(--accent-strong); font-size: 11px; font-weight: 700; flex: none; }
+    .avatar { width: 24px; height: 24px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; background: #0f131b; border: 1px solid var(--line-soft); color: var(--accent-strong); font-size: 11px; font-weight: 700; flex: none; }
     .message.user .avatar { color: #d7e9ff; border-color: rgba(105, 149, 206, 0.34); }
     .message-label { font-size: 12px; font-weight: 700; }
     .message-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
@@ -1752,17 +1752,32 @@ function renderThreadPanelHtml(nonce: string): string {
     .utility-body { display: grid; gap: 10px; }
     .utility-hint { color: var(--muted); font-size: 12px; }
     .drawer-backdrop { position: fixed; inset: 0; background: rgba(5, 7, 10, 0.56); z-index: 18; }
-    .panel-drawer { position: fixed; top: 10px; bottom: 10px; width: min(360px, calc(100vw - 24px)); border: 1px solid var(--line); border-radius: 20px; background: linear-gradient(180deg, rgba(14, 17, 23, 0.99) 0%, rgba(10, 13, 19, 0.99) 100%); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.36); z-index: 19; display: grid; gap: 12px; align-content: start; padding: 16px; overflow: auto; }
+    .panel-drawer { position: fixed; top: 10px; bottom: 10px; width: min(340px, calc(100vw - 24px)); border: 1px solid var(--line); border-radius: 12px; background: #10151c; box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28); z-index: 19; display: grid; gap: 12px; align-content: start; padding: 16px; overflow: auto; }
     .panel-drawer.left { left: 10px; }
-    .panel-drawer.right { right: 10px; }
     .drawer-head { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
     .drawer-title { font-size: 14px; font-weight: 700; color: #f4f7fb; }
     .drawer-subtitle { color: var(--muted); font-size: 12px; line-height: 1.45; }
-    .drawer-close { border-radius: 999px; padding: 6px 10px; background: #11151c; border: 1px solid var(--line-soft); color: var(--muted); font-size: 12px; }
+    .drawer-close { border-radius: 8px; padding: 6px 10px; background: #11151c; border: 1px solid var(--line-soft); color: var(--muted); font-size: 12px; }
     .drawer-content { display: grid; gap: 12px; }
+    .change-card { border: 1px solid #2d3644; border-radius: 10px; background: #10161d; overflow: hidden; }
+    .change-card-header { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--line-soft); background: #111820; }
+    .change-card-title { font-size: 13px; font-weight: 700; color: #eef3fb; }
+    .change-card-delta { display: flex; gap: 10px; font-size: 12px; font-weight: 700; }
+    .delta-plus { color: #57c67f; }
+    .delta-minus { color: #f06b77; }
+    .change-file-list { display: grid; }
+    .change-file-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 14px; border-top: 1px solid var(--line-soft); }
+    .change-file-row:first-child { border-top: 0; }
+    .change-file-name { min-width: 0; font-size: 13px; line-height: 1.45; color: #eef3fb; word-break: break-all; }
+    .change-file-stats { display: inline-flex; gap: 10px; font-size: 12px; font-weight: 700; }
+    .change-preview { margin: 0 14px 14px; border: 1px solid #334055; border-radius: 10px; overflow: hidden; background: #0f151c; }
+    .change-preview-head { display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 10px 12px; background: #121a23; border-bottom: 1px solid #334055; }
+    .change-preview-title { min-width: 0; font-size: 12px; font-weight: 600; color: #eef3fb; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .change-preview-body { padding: 12px; font-family: var(--font-mono); font-size: 12px; line-height: 1.55; color: #d8e2f1; white-space: pre-wrap; word-break: break-word; }
+    .change-actions { display: flex; gap: 8px; flex-wrap: wrap; padding: 0 14px 14px; }
     .timeline { align-content: start; max-height: calc(100vh - 300px); overflow: auto; padding-right: 4px; }
     @media (max-width: 1180px) { .two-col, .checkbox-grid { grid-template-columns: 1fr; } .message.user, .message.assistant { margin-left: 0; margin-right: 0; } }
-    @media (max-width: 960px) { .layout { grid-template-columns: 1fr; } .sidebar { border-right: 0; border-bottom: 1px solid var(--line); } .main-shell { padding-left: 12px; padding-right: 12px; } .panel-drawer { width: calc(100vw - 20px); left: 10px; right: 10px; } }
+    @media (max-width: 960px) { .layout { grid-template-columns: 1fr; } .sidebar { border-right: 0; border-bottom: 1px solid var(--line); } .main-shell { padding-left: 12px; padding-right: 12px; } .panel-drawer { width: calc(100vw - 20px); left: 10px; } .change-file-row { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
@@ -1796,9 +1811,7 @@ function renderThreadPanelHtml(nonce: string): string {
     let draftSyncTimer = undefined;
     let selectedRunProfileId = "";
     let threadFilter = "";
-    let activeUtilityTab = "";
     let showThreadDrawer = false;
-    let showSupportDrawer = false;
     let contextOptions = {
       includeActiveFile: true,
       includeSelection: false,
@@ -1815,7 +1828,6 @@ function renderThreadPanelHtml(nonce: string): string {
       if (!selectedRunProfileId || !state.runProfiles.some(function(profile) { return profile.id === selectedRunProfileId; })) {
         selectedRunProfileId = state.derived.runProfileId || (state.runProfiles[0] ? state.runProfiles[0].id : "");
       }
-      activeUtilityTab = pickUtilityTab(activeUtilityTab);
       render();
     });
 
@@ -1831,24 +1843,11 @@ function renderThreadPanelHtml(nonce: string): string {
       }
       if (action === "toggle-thread-drawer") {
         showThreadDrawer = !showThreadDrawer;
-        if (showThreadDrawer) {
-          showSupportDrawer = false;
-        }
-        render();
-        return;
-      }
-      if (action === "toggle-support-drawer") {
-        showSupportDrawer = !showSupportDrawer;
-        if (showSupportDrawer) {
-          showThreadDrawer = false;
-          activeUtilityTab = pickUtilityTab(activeUtilityTab);
-        }
         render();
         return;
       }
       if (action === "close-drawers") {
         showThreadDrawer = false;
-        showSupportDrawer = false;
         render();
         return;
       }
@@ -1862,12 +1861,6 @@ function renderThreadPanelHtml(nonce: string): string {
         draftPrompt = "";
         showThreadDrawer = false;
         post("select-thread", { threadId: target.dataset.threadId || "" });
-        return;
-      }
-      if (action === "select-utility-tab") {
-        activeUtilityTab = target.dataset.tab || "review";
-        showSupportDrawer = true;
-        render();
         return;
       }
       if (action === "submit-prompt") {
@@ -1966,11 +1959,10 @@ function renderThreadPanelHtml(nonce: string): string {
         renderBanner(),
         '  <section class="card flat topbar-shell">' + renderTopBar() + '</section>',
         '  <section class="chat-stack">',
-        '    <section class="card chat-panel timeline-card"><div class="section-head"><div><div class="title">대화</div><div class="muted">요청, 응답, 패치/실행 결과만 기본으로 보여줍니다.</div></div></div>' + renderTimeline() + '</section>',
+        '    <section class="card chat-panel timeline-card">' + renderTimeline() + '</section>',
         '  </section>',
         '  <section class="card flat">' + renderComposer(promptValue) + '</section>',
         renderThreadDrawer(),
-        renderSupportDrawer(),
         '</div>',
       ].join('');
     }
@@ -1978,12 +1970,11 @@ function renderThreadPanelHtml(nonce: string): string {
     function renderTopBar() {
       const title = state.composeMode ? '새 세션' : ((state.currentThread && state.currentThread.title) || '세션을 선택하세요');
       const summary = state.live.activity.summary || ((state.currentThread && state.currentThread.lastEventText) || '채팅을 시작하면 결과가 여기에 이어집니다.');
-      const phase = state.operation.phase || ((state.currentThread && state.currentThread.state) || '-');
       return [
         '<div class="topbar">',
         '  <div class="topbar-actions"><button class="toolbar-button ' + (showThreadDrawer ? 'active' : '') + '" data-action="toggle-thread-drawer">세션</button></div>',
         '  <div class="topbar-main"><div class="topbar-title">' + esc(title) + '</div><div class="topbar-subtitle">' + esc(summary) + '</div></div>',
-        '  <div class="topbar-actions"><span class="badge ' + badgeTone(phase) + '">' + esc(phase) + '</span><button class="toolbar-button" data-action="new-thread">새 세션</button><button class="toolbar-button ' + (showSupportDrawer ? 'active' : '') + '" data-action="toggle-support-drawer">패널</button></div>',
+        '  <div class="topbar-actions"><button class="toolbar-button" data-action="refresh">새로고침</button><button class="toolbar-button" data-action="new-thread">새 세션</button></div>',
         '</div>',
       ].join('');
     }
@@ -2000,31 +1991,6 @@ function renderThreadPanelHtml(nonce: string): string {
         '    <input id="thread-filter" class="search" placeholder="세션 검색" value="' + attr(threadFilter) + '" />',
         '    <div class="row spread"><button class="primary block" data-action="new-thread">새 세션</button><button class="ghost" data-action="refresh">새로고침</button></div>',
         '    <div class="threads">' + renderThreads() + '</div>',
-        '  </div>',
-        '</aside>',
-      ].join('');
-    }
-
-    function renderSupportDrawer() {
-      if (!showSupportDrawer) {
-        return '';
-      }
-      const tab = pickUtilityTab(activeUtilityTab);
-      activeUtilityTab = tab;
-      const tabs = [
-        { id: 'review', label: '검토' },
-        { id: 'run', label: '실행' },
-        { id: 'workspace', label: '파일' },
-      ];
-      return [
-        '<button class="drawer-backdrop" data-action="close-drawers" aria-label="드로어 닫기"></button>',
-        '<aside class="panel-drawer right">',
-        '  <div class="drawer-head"><div><div class="drawer-title">보조 패널</div><div class="drawer-subtitle">채팅 밖의 검토, 실행, 파일 정보만 여기서 펼칩니다.</div></div><button class="drawer-close" data-action="close-drawers">닫기</button></div>',
-        '  <div class="drawer-content">',
-        '    <div class="utility-tabs">' + tabs.map(function(item) {
-          return '<button class="utility-tab ' + (item.id === tab ? 'active' : '') + '" data-action="select-utility-tab" data-tab="' + attr(item.id) + '">' + esc(item.label) + '</button>';
-        }).join('') + '</div>',
-        '    <div class="utility-body">' + renderUtilityTabContent(tab) + '</div>',
         '  </div>',
         '</aside>',
       ].join('');
@@ -2116,11 +2082,11 @@ function renderThreadPanelHtml(nonce: string): string {
     function renderComposer(promptValue) {
       return [
         '<div class="composer-shell">',
-        '<div class="section-head"><div><div class="title">메시지</div><div class="muted">채팅에 집중하고 검토, 실행, 파일은 아래 토글에서 이어갑니다.</div></div><span class="badge">' + esc(state.composeMode ? '새 세션' : '현재 세션') + '</span></div>',
+        '<div class="section-head"><div><div class="title">메시지</div><div class="muted">필요한 요청만 적고 바로 보내세요.</div></div><span class="badge">' + esc(state.composeMode ? '새 세션' : '현재 세션') + '</span></div>',
         '<textarea id="prompt-input" placeholder="예: src/hello.py 파일에 간단한 스크립트를 추가해줘">' + esc(promptValue) + '</textarea>',
         '<div class="composer-actions">',
         '  <button class="primary" data-action="submit-prompt">전송</button>',
-        '  <span class="utility-hint">실행과 파일 확인은 아래 토글 패널에서 이어집니다.</span>',
+        '  <span class="utility-hint">변경사항과 실행 결과는 대화 안에서 바로 보여줍니다.</span>',
         '</div>',
         '<details><summary>고급 옵션</summary><div class="checkbox-grid">',
         renderCheckbox('includeActiveFile', '현재 파일', contextOptions.includeActiveFile),
@@ -2144,33 +2110,6 @@ function renderThreadPanelHtml(nonce: string): string {
         return '';
       }
       return '<section class="summary-strip">' + items.join('') + '</section>';
-    }
-
-    function renderUtilityPanel() {
-      const tab = pickUtilityTab(activeUtilityTab);
-      activeUtilityTab = tab;
-      const tabs = [
-        { id: 'review', label: '검토' },
-        { id: 'run', label: '실행' },
-        { id: 'workspace', label: '파일' },
-      ];
-      return [
-        '<div class="section-head"><div><div class="title">보조 패널</div><div class="muted">채팅에서 벗어나는 정보는 여기서만 펼칩니다.</div></div></div>',
-        '<div class="utility-tabs">' + tabs.map(function(item) {
-          return '<button class="utility-tab ' + (item.id === tab ? 'active' : '') + '" data-action="select-utility-tab" data-tab="' + attr(item.id) + '">' + esc(item.label) + '</button>';
-        }).join('') + '</div>',
-        '<div class="utility-body">' + renderUtilityTabContent(tab) + '</div>',
-      ].join('');
-    }
-
-    function renderUtilityTabContent(tab) {
-      if (tab === 'run') {
-        return renderTerminal();
-      }
-      if (tab === 'workspace') {
-        return renderWorkspace();
-      }
-      return renderReview();
     }
 
     function renderReview() {
@@ -2268,11 +2207,12 @@ function renderThreadPanelHtml(nonce: string): string {
         const role = normalizedRole(item);
         const headline = eventHeadline(item, role);
         const content = eventBody(item, headline);
+        const attachment = renderEventAttachment(item);
         const chips = [];
         if (item.data && item.data.status) {
           chips.push('<span class="badge ' + badgeTone(item.data.status) + '">' + esc(String(item.data.status)) + '</span>');
         }
-        return '<article class="message ' + role + '"><div class="message-meta"><div class="message-author"><span class="avatar">' + esc(roleGlyph(role)) + '</span><div><div class="message-label">' + esc(roleLabel(role)) + '</div><div class="message-sub">' + esc(fmt(item.at, true)) + '</div></div></div><div class="message-chips">' + chips.join('') + '</div></div>' + (headline ? '<div class="message-title">' + esc(headline) + '</div>' : '') + (content ? '<div class="message-body">' + nl2br(content) + '</div>' : '') + '</article>';
+        return '<article class="message ' + role + '"><div class="message-meta"><div class="message-author"><span class="avatar">' + esc(roleGlyph(role)) + '</span><div><div class="message-label">' + esc(roleLabel(role)) + '</div><div class="message-sub">' + esc(fmt(item.at, true)) + '</div></div></div><div class="message-chips">' + chips.join('') + '</div></div>' + (headline ? '<div class="message-title">' + esc(headline) + '</div>' : '') + (content ? '<div class="message-body">' + nl2br(content) + '</div>' : '') + attachment + '</article>';
       }).join('') + '</div>';
     }
 
@@ -2282,20 +2222,6 @@ function renderThreadPanelHtml(nonce: string): string {
         return preview;
       }
       return '아직 기록이 없습니다.';
-    }
-
-    function pickUtilityTab(current) {
-      const normalized = String(current || '').toLowerCase();
-      if (normalized === 'review' || normalized === 'run' || normalized === 'workspace') {
-        return normalized;
-      }
-      if (state.derived.patchFiles.length || state.derived.patchResultStatus || state.derived.patchResultMessage) {
-        return 'review';
-      }
-      if (state.derived.runStatus || state.live.terminal.status || state.derived.runOutput || state.derived.runErrors.length) {
-        return 'run';
-      }
-      return 'workspace';
     }
 
     function shouldShowPrimaryEvent(item) {
@@ -2355,6 +2281,151 @@ function renderThreadPanelHtml(nonce: string): string {
         return raw;
       }
       return '';
+    }
+
+    function renderEventAttachment(item) {
+      const kind = String(item.kind || '').toLowerCase();
+      if (kind === 'patch_ready') {
+        const files = extractPatchFiles(item);
+        return files.length ? renderChangeCard(files) : '';
+      }
+      if (kind === 'patch_applied' || kind === 'patch_result') {
+        return renderPatchResultCard(item);
+      }
+      if (kind === 'run_finished' || kind === 'run_result') {
+        return renderRunResultCard(item);
+      }
+      return '';
+    }
+
+    function renderChangeCard(files) {
+      const stats = aggregatePatchStats(files);
+      const preview = renderPatchPreview(files[0]);
+      return [
+        '<section class="change-card">',
+        '  <div class="change-card-header">',
+        '    <div class="change-card-title">' + esc(files.length + '개 파일 변경됨') + '</div>',
+        '    <div class="change-card-delta"><span class="delta-plus">+' + esc(String(stats.added)) + '</span><span class="delta-minus">-' + esc(String(stats.removed)) + '</span></div>',
+        '  </div>',
+        '  <div class="change-file-list">' + files.map(function(file) {
+          const fileStats = patchFileStats(file);
+          return '<div class="change-file-row"><div class="change-file-name">' + esc(file.path || '-') + '</div><div class="change-file-stats"><span class="delta-plus">+' + esc(String(fileStats.added)) + '</span><span class="delta-minus">-' + esc(String(fileStats.removed)) + '</span></div></div>';
+        }).join('') + '</div>',
+        preview,
+        '  <div class="change-actions"><button class="secondary" data-action="apply-patch"' + (state.currentJobId && files.length ? '' : ' disabled') + '>변경 반영</button>' + renderRunAction() + '</div>',
+        '</section>',
+      ].join('');
+    }
+
+    function renderPatchResultCard(item) {
+      const status = String((item.data && item.data.status) || state.derived.patchResultStatus || '-');
+      const message = String((item.data && item.data.message) || state.derived.patchResultMessage || item.body || '');
+      return [
+        '<section class="change-card">',
+        '  <div class="change-card-header">',
+        '    <div class="change-card-title">변경 반영 결과</div>',
+        '    <div class="change-card-delta"><span class="' + (status.toLowerCase() === 'failed' ? 'delta-minus' : 'delta-plus') + '">' + esc(status) + '</span></div>',
+        '  </div>',
+        '  <div class="change-file-list"><div class="change-file-row"><div class="change-file-name">' + esc(message || '결과 메시지가 없습니다.') + '</div></div></div>',
+        '  <div class="change-actions">' + renderRunAction() + '</div>',
+        '</section>',
+      ].join('');
+    }
+
+    function renderRunResultCard(item) {
+      const changedFiles = normalizeStringList((item.data && item.data.changedFiles) || state.derived.currentJobFiles);
+      const status = String((item.data && item.data.status) || state.derived.runStatus || '-');
+      const summary = String((item.data && item.data.summary) || state.derived.runSummary || item.body || '');
+      const rows = [];
+      if (changedFiles.length) {
+        rows.push.apply(rows, changedFiles.map(function(path) {
+          return '<div class="change-file-row"><div class="change-file-name">' + esc(path) + '</div><div class="change-file-stats"><span class="delta-plus">changed</span></div></div>';
+        }));
+      } else if (summary) {
+        rows.push('<div class="change-file-row"><div class="change-file-name">' + esc(summary) + '</div></div>');
+      }
+      return [
+        '<section class="change-card">',
+        '  <div class="change-card-header">',
+        '    <div class="change-card-title">실행 결과</div>',
+        '    <div class="change-card-delta"><span class="' + (status.toLowerCase() === 'failed' ? 'delta-minus' : 'delta-plus') + '">' + esc(status) + '</span></div>',
+        '  </div>',
+        '  <div class="change-file-list">' + rows.join('') + '</div>',
+        '</section>',
+      ].join('');
+    }
+
+    function renderRunAction() {
+      return '<button data-action="run-profile"' + (state.currentJobId && selectedRunProfileId ? '' : ' disabled') + '>실행</button>';
+    }
+
+    function normalizeStringList(value) {
+      if (Array.isArray(value)) {
+        return value.filter(function(item) { return typeof item === 'string' && item.trim().length > 0; });
+      }
+      if (typeof value === 'string' && value.trim().length > 0) {
+        return [value.trim()];
+      }
+      return [];
+    }
+
+    function extractPatchFiles(item) {
+      const eventFiles = Array.isArray(item.data && item.data.files) ? item.data.files : [];
+      if (eventFiles.length) {
+        return eventFiles;
+      }
+      return Array.isArray(state.derived.patchFiles) ? state.derived.patchFiles : [];
+    }
+
+    function renderPatchPreview(file) {
+      if (!file || !Array.isArray(file.hunks) || !file.hunks.length) {
+        return '';
+      }
+      const previewLines = String(file.hunks[0].diff || '')
+        .split(/\\r?\\n/)
+        .filter(function(line) { return line.trim().length > 0; })
+        .slice(0, 8)
+        .join('\\n');
+      if (!previewLines) {
+        return '';
+      }
+      const stats = patchFileStats(file);
+      return [
+        '<div class="change-preview">',
+        '  <div class="change-preview-head"><div class="change-preview-title">' + esc(file.path || '-') + '</div><div class="change-card-delta"><span class="delta-plus">+' + esc(String(stats.added)) + '</span><span class="delta-minus">-' + esc(String(stats.removed)) + '</span></div></div>',
+        '  <div class="change-preview-body">' + esc(previewLines) + '</div>',
+        '</div>',
+      ].join('');
+    }
+
+    function aggregatePatchStats(files) {
+      return files.reduce(function(acc, file) {
+        const stats = patchFileStats(file);
+        acc.added += stats.added;
+        acc.removed += stats.removed;
+        return acc;
+      }, { added: 0, removed: 0 });
+    }
+
+    function patchFileStats(file) {
+      const hunks = Array.isArray(file && file.hunks) ? file.hunks : [];
+      let added = 0;
+      let removed = 0;
+      hunks.forEach(function(hunk) {
+        String((hunk && hunk.diff) || '').split(/\\r?\\n/).forEach(function(line) {
+          if (line.startsWith('+++') || line.startsWith('---')) {
+            return;
+          }
+          if (line.startsWith('+')) {
+            added += 1;
+            return;
+          }
+          if (line.startsWith('-')) {
+            removed += 1;
+          }
+        });
+      });
+      return { added: added, removed: removed };
     }
 
     function normalizedRole(item) {

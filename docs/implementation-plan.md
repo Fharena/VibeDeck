@@ -254,8 +254,8 @@
   - agent에 `/v1/agent/runtime/shutdown` 엔드포인트를 추가해 extension이 안전하게 종료를 요청할 수 있게 하고, 종료 실패 시에는 포트 점유 프로세스 정리 경로로 폴백
   - 검증: `go test ./internal/agent -run "TestHTTPServerRuntime(Adapter|Shutdown)|TestHTTPServerBootstrapEndpoint"` 통과, `npm --prefix extensions/vibedeck-bridge run build` 통과, `npm --prefix extensions/vibedeck-bridge run smoke:bootstrap` 통과
 - 2026-03-26 / 채팅 우선 UX 정리
-  - extension shared threads를 `항상 보이는 좌/우 정보판` 대신 `메인 채팅 + 세션 드로어 + 보조 패널 드로어` 구조로 다시 잘라 Cursor 채팅창처럼 기본 화면에는 대화만 남기도록 정리
-  - 상단 토글에서만 `세션`과 `패널(검토/실행/파일)`을 열 수 있게 바꾸고, 세션 헤더/목록/배너의 저신호 상태 로그는 기본 숨김으로 정리
+  - extension shared threads를 `메인 채팅 + 세션 드로어` 구조로 다시 잘라 Cursor 채팅창처럼 기본 화면에는 대화와 composer만 남기도록 정리
+  - 우측 보조 패널은 제거하고, 패치/실행/파일 상태는 채팅 안의 인라인 변경 카드와 결과 카드로 흡수
   - extension 타임라인은 사용자/에이전트 대화와 패치/실행 결과만 기본 피드에 남기고, `prompt_accepted`, `tool_activity`, `live_state`, `patch_apply`, `run_profile` 같은 운영성 이벤트는 기본 숨김으로 조정
   - 모바일은 `현재 작업` 카드에서 도구 활동/최근 오류를 기본 표면에서 빼고, `작업 로그`를 `대화와 결과` 피드로 바꿔 요청/응답/검토 결과만 남기도록 정리
   - 검증: `npm --prefix extensions/vibedeck-bridge run build` 통과, `npm --prefix extensions/vibedeck-bridge run smoke:panel` 통과, 변경 파일 대상 `flutter analyze` 통과, 안전 경로 `flutter_safe.ps1 test test/app_smoke_test.dart` 통과
