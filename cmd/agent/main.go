@@ -20,6 +20,7 @@ func main() {
 	agentPublicBaseURL := envOr("AGENT_PUBLIC_BASE_URL", "")
 	signalingPublicBaseURL := envOr("SIGNALING_PUBLIC_BASE_URL", "")
 	threadStorePath := envOr("THREAD_STORE_FILE", defaultThreadStorePath())
+	controlTimeouts := agent.LoadControlTimeoutConfigFromEnv()
 
 	profiles, err := agent.LoadRunProfiles(profilePath)
 	if err != nil {
@@ -49,10 +50,12 @@ func main() {
 	controlMetrics := agent.NewControlMetrics()
 	p2pManager := agent.NewP2PSessionManager(stateManager, ackTracker, orchestrator, signalingBaseURL)
 	p2pManager.SetControlMetrics(controlMetrics)
+	p2pManager.SetControlTimeouts(controlTimeouts)
 
 	server := agent.NewHTTPServer(adapter, orchestrator, stateManager, ackTracker, controlMetrics, p2pManager, agent.HTTPServerConfig{
 		PublicAgentBaseURL:     agentPublicBaseURL,
 		PublicSignalingBaseURL: signalingPublicBaseURL,
+		ControlTimeouts:        controlTimeouts,
 	})
 
 	log.Printf("agent server listening on %s (adapter=%s, threadStore=%s)", addr, adapter.Name(), threadStorePath)

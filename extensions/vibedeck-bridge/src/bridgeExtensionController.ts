@@ -621,6 +621,7 @@ class DefaultBridgeExtensionController implements BridgeExtensionController {
       config.get<string>("commandProvider") === "external"
         ? "external"
         : "builtin_cursor_agent";
+    const agentSettings = readLocalAgentSettings(config);
     return {
       autoStart: config.get<boolean>("autoStart", true),
       mode: modeValue,
@@ -628,8 +629,12 @@ class DefaultBridgeExtensionController implements BridgeExtensionController {
       tcpHost: config.get<string>("tcpHost", "127.0.0.1").trim() || "127.0.0.1",
       tcpPort: normalizePort(config.get<number>("tcpPort", 7797)),
       commands: readCommandSettings(config),
-      cursorAgent: readCursorAgentSettings(config, this.vscode.workspace.workspaceFolders),
-      agent: readLocalAgentSettings(config),
+      cursorAgent: readCursorAgentSettings(
+        config,
+        this.vscode.workspace.workspaceFolders,
+        agentSettings,
+      ),
+      agent: agentSettings,
     };
   }
 
@@ -979,12 +984,17 @@ function readCommandSettings(
 function readCursorAgentSettings(
   config: BridgeExtensionConfigurationLike,
   workspaceFolders?: BridgeExtensionWorkspaceFolderLike[],
+  agentSettings?: LocalAgentSettings,
 ): CursorAgentCommandAdapterConfig {
   const workspaceRoot =
     readOptionalCommand(config, "cursorAgent.workspaceRoot") ?? workspaceFolders?.[0]?.uri.fsPath;
   const extraArgs = readStringArray(config, "cursorAgent.extraArgs");
   const trustWorkspace = config.get<boolean>("cursorAgent.trustWorkspace", true);
   const model = (config.get<string>("cursorAgent.model", "auto") ?? "auto").trim();
+  const fallbackPromptTimeoutMs =
+    agentSettings?.controlTimeoutPromptSubmitMs ?? 300000;
+  const fallbackRunTimeoutMs =
+    agentSettings?.controlTimeoutRunProfileMs ?? 300000;
   return {
     workspaceRoot,
     tempRoot: readOptionalCommand(config, "cursorAgent.tempRoot"),
@@ -998,13 +1008,13 @@ function readCursorAgentSettings(
     syncIgnoredPaths: readStringArray(config, "cursorAgent.syncIgnoredPaths"),
     useWsl: config.get<boolean>("cursorAgent.useWsl", false),
     wslDistro: readOptionalCommand(config, "cursorAgent.wslDistro"),
-    promptTimeoutMs: normalizeDuration(
-      config.get<number>("cursorAgent.promptTimeoutMs", 300000),
-      300000,
+    promptTimeoutMs: normalizeOptionalDuration(
+      config.get<number>("cursorAgent.promptTimeoutMs", 0),
+      fallbackPromptTimeoutMs,
     ),
-    runTimeoutMs: normalizeDuration(
-      config.get<number>("cursorAgent.runTimeoutMs", 300000),
-      300000,
+    runTimeoutMs: normalizeOptionalDuration(
+      config.get<number>("cursorAgent.runTimeoutMs", 0),
+      fallbackRunTimeoutMs,
     ),
   };
 }
@@ -1057,7 +1067,9 @@ function describeCommandDiagnostics(
     `명령 공급자: ${describeProvider(settings)}`,
     `등록된 명령 수: ${diagnostics.availableCount}`,
     `필수 명령 준비: ${diagnostics.required.length - diagnostics.missingRequired.length}/${diagnostics.required.length}`,
+    describeProviderTimeouts(settings),
     describeAgentStatus(agentStatus),
+    describeAgentControlTimeouts(settings.agent),
   ];
 
   const smokeCommand = buildSmokeCommand(settings, address);
@@ -1131,6 +1143,17 @@ function describeAgentStatus(status: LocalAgentStatus): string {
   return lines.join("\n");
 }
 
+function describeProviderTimeouts(settings: BridgeSettings): string {
+  if (settings.mode !== "command" || settings.commandProvider !== "builtin_cursor_agent") {
+    return "provider timeout: -";
+  }
+  return `provider timeout: prompt ${formatDurationMs(settings.cursorAgent.promptTimeoutMs)} / run ${formatDurationMs(settings.cursorAgent.runTimeoutMs)}`;
+}
+
+function describeAgentControlTimeouts(settings: LocalAgentSettings): string {
+  return `agent 제어 timeout: 기본 ${formatDurationMs(settings.controlTimeoutDefaultMs)} / prompt ${formatDurationMs(settings.controlTimeoutPromptSubmitMs)} / patch ${formatDurationMs(settings.controlTimeoutPatchApplyMs)} / run ${formatDurationMs(settings.controlTimeoutRunProfileMs)}`;
+}
+
 function describeAgentRuntimeState(state: LocalAgentStatus["state"]): string {
   switch (state) {
     case "running":
@@ -1147,6 +1170,20 @@ function describeAgentRuntimeState(state: LocalAgentStatus["state"]): string {
 function toAgentBaseUrl(settings: LocalAgentSettings): string {
   const host = settings.host === "0.0.0.0" || settings.host === "::" ? "127.0.0.1" : settings.host;
   return `http://${host}:${settings.port}`;
+}
+
+function formatDurationMs(value: number): string {
+  const normalized = Math.max(0, Math.trunc(value));
+  if (normalized === 0) {
+    return "0ms";
+  }
+  if (normalized % 60000 === 0) {
+    return `${normalized / 60000}분`;
+  }
+  if (normalized % 1000 === 0) {
+    return `${normalized / 1000}초`;
+  }
+  return `${normalized}ms`;
 }
 
 function resolveCommands(commands: Partial<CursorBridgeCommands>): CursorBridgeCommands {
@@ -1235,6 +1272,13 @@ function normalizeDuration(value: number, fallback: number): number {
   return Math.trunc(value);
 }
 
+function normalizeOptionalDuration(value: number, fallback: number): number {
+  if (!Number.isFinite(value) || value <= 0) {
+    return fallback;
+  }
+  return normalizeDuration(value, fallback);
+}
+
 function ensureCursorAgentHeadlessArgs(args: string[]): string[] {
   const next = [...args];
   if (!next.includes("--print")) {
@@ -1274,7 +1318,9 @@ function formatBridgeStatusReport(options: {
     `VibeDeck 브리지: ${options.connected ? "실행 중" : "중지됨"} (${options.mode})`,
     `브리지 주소: ${options.address}`,
     `명령 공급자: ${describeProvider(options.settings)}`,
+    describeProviderTimeouts(options.settings),
     describeAgentStatus(options.agentStatus),
+    describeAgentControlTimeouts(options.settings.agent),
   ];
 
   if (options.lastError) {

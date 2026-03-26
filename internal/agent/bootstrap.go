@@ -12,6 +12,7 @@ type HTTPServerConfig struct {
 	PublicAgentBaseURL         string
 	PublicSignalingBaseURL     string
 	BootstrapRecentThreadLimit int
+	ControlTimeouts            ControlTimeoutConfig
 }
 
 type BootstrapResponse struct {
@@ -19,6 +20,7 @@ type BootstrapResponse struct {
 	SignalingBaseURL string                `json:"signalingBaseUrl,omitempty"`
 	WorkspaceRoot    string                `json:"workspaceRoot,omitempty"`
 	Adapter          BootstrapAdapterView  `json:"adapter"`
+	ControlTimeouts  ControlTimeoutView    `json:"controlTimeouts"`
 	CurrentThreadID  string                `json:"currentThreadId,omitempty"`
 	CurrentSessionID string                `json:"currentSessionId,omitempty"`
 	RecentThreads    []BootstrapThreadView `json:"recentThreads,omitempty"`
@@ -44,6 +46,7 @@ func normalizeHTTPServerConfig(cfg HTTPServerConfig) HTTPServerConfig {
 	if cfg.BootstrapRecentThreadLimit <= 0 {
 		cfg.BootstrapRecentThreadLimit = 5
 	}
+	cfg.ControlTimeouts = normalizeControlTimeoutConfig(cfg.ControlTimeouts)
 	return cfg
 }
 

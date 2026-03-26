@@ -396,6 +396,12 @@ func TestHTTPServerBootstrapEndpoint(t *testing.T) {
 	if body.Adapter.Name != "mock-cursor" || body.Adapter.Provider != "cursor" || !body.Adapter.Ready {
 		t.Fatalf("unexpected bootstrap adapter info: %+v", body.Adapter)
 	}
+	if body.ControlTimeouts.Default != "5s" ||
+		body.ControlTimeouts.PromptSubmit != "5m" ||
+		body.ControlTimeouts.PatchApply != "30s" ||
+		body.ControlTimeouts.RunProfile != "5m" {
+		t.Fatalf("unexpected control timeout view: %+v", body.ControlTimeouts)
+	}
 	if body.CurrentThreadID != "thread-bootstrap-1" {
 		t.Fatalf("expected current thread id thread-bootstrap-1, got %q", body.CurrentThreadID)
 	}

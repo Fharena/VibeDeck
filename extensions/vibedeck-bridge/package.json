@@ -267,15 +267,15 @@
         },
         "vibedeckBridge.cursorAgent.promptTimeoutMs": {
           "type": "number",
-          "default": 300000,
-          "minimum": 1000,
-          "description": "builtin cursor-agent provider의 prompt 실행 timeout(ms)입니다."
+          "default": 0,
+          "minimum": 0,
+          "description": "builtin cursor-agent provider의 prompt 실행 timeout(ms)입니다. 0이면 agent.controlTimeoutPromptSubmitMs를 따라갑니다."
         },
         "vibedeckBridge.cursorAgent.runTimeoutMs": {
           "type": "number",
-          "default": 300000,
-          "minimum": 1000,
-          "description": "builtin cursor-agent provider의 run profile timeout(ms)입니다."
+          "default": 0,
+          "minimum": 0,
+          "description": "builtin cursor-agent provider의 run profile timeout(ms)입니다. 0이면 agent.controlTimeoutRunProfileMs를 따라갑니다."
         },
         "vibedeckBridge.agentBaseUrl": {
           "type": "string",
@@ -362,6 +362,30 @@
           "default": 15000,
           "minimum": 1000,
           "description": "Timeout in milliseconds for waiting until the local agent health check is ready."
+        },
+        "vibedeckBridge.agent.controlTimeoutDefaultMs": {
+          "type": "number",
+          "default": 5000,
+          "minimum": 1000,
+          "description": "로컬 agent의 기본 control timeout(ms)입니다. 지정되지 않은 message type에 적용됩니다."
+        },
+        "vibedeckBridge.agent.controlTimeoutPromptSubmitMs": {
+          "type": "number",
+          "default": 300000,
+          "minimum": 1000,
+          "description": "로컬 agent의 PROMPT_SUBMIT timeout(ms)입니다."
+        },
+        "vibedeckBridge.agent.controlTimeoutPatchApplyMs": {
+          "type": "number",
+          "default": 30000,
+          "minimum": 1000,
+          "description": "로컬 agent의 PATCH_APPLY timeout(ms)입니다."
+        },
+        "vibedeckBridge.agent.controlTimeoutRunProfileMs": {
+          "type": "number",
+          "default": 300000,
+          "minimum": 1000,
+          "description": "로컬 agent의 RUN_PROFILE timeout(ms)입니다."
         },
         "vibedeckBridge.mobileBootstrap.hostOverride": {
           "type": "string",

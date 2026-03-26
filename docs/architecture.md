@@ -123,7 +123,7 @@ TypeScript 브리지 패키지 구성:
 
 모든 제어 경로 메시지는 공통 Envelope를 사용합니다.
 
-- HTTP/P2P control handler는 message type별 timeout budget을 사용합니다. `PROMPT_SUBMIT`/`RUN_PROFILE`는 5분, `PATCH_APPLY`는 30초, 나머지는 5초입니다.
+- HTTP/P2P control handler는 message type별 timeout budget을 사용합니다. 기본값은 `PROMPT_SUBMIT`/`RUN_PROFILE` 5분, `PATCH_APPLY` 30초, 나머지 5초이며, agent는 `CONTROL_TIMEOUT_*` 환경변수로 이를 운영 설정에서 override할 수 있습니다.
 
 - `sid`: session id
 - `rid`: request id

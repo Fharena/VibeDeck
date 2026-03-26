@@ -2342,6 +2342,7 @@ class BootstrapStatusView {
     this.currentThreadId = '',
     this.currentSessionId = '',
     this.adapter = const BootstrapAdapterView(),
+    this.controlTimeouts = const BootstrapControlTimeoutView(),
     this.recentThreads = const [],
   });
 
@@ -2351,10 +2352,12 @@ class BootstrapStatusView {
   final String currentThreadId;
   final String currentSessionId;
   final BootstrapAdapterView adapter;
+  final BootstrapControlTimeoutView controlTimeouts;
   final List<BootstrapThreadView> recentThreads;
 
   factory BootstrapStatusView.fromMap(Map<String, dynamic> map) {
     final adapterRaw = map['adapter'];
+    final controlTimeoutsRaw = map['controlTimeouts'];
     final recentThreadsRaw = map['recentThreads'];
     return BootstrapStatusView(
       agentBaseUrl: map['agentBaseUrl']?.toString() ?? '',
@@ -2365,6 +2368,11 @@ class BootstrapStatusView {
       adapter: adapterRaw is Map
           ? BootstrapAdapterView.fromMap(Map<String, dynamic>.from(adapterRaw))
           : const BootstrapAdapterView(),
+      controlTimeouts: controlTimeoutsRaw is Map
+          ? BootstrapControlTimeoutView.fromMap(
+              Map<String, dynamic>.from(controlTimeoutsRaw),
+            )
+          : const BootstrapControlTimeoutView(),
       recentThreads: recentThreadsRaw is List
           ? recentThreadsRaw
               .whereType<Map>()
@@ -2372,6 +2380,35 @@ class BootstrapStatusView {
                   BootstrapThreadView.fromMap(Map<String, dynamic>.from(item)))
               .toList()
           : const [],
+    );
+  }
+}
+
+class BootstrapControlTimeoutView {
+  const BootstrapControlTimeoutView({
+    this.defaultTimeout = '',
+    this.promptSubmit = '',
+    this.patchApply = '',
+    this.runProfile = '',
+  });
+
+  final String defaultTimeout;
+  final String promptSubmit;
+  final String patchApply;
+  final String runProfile;
+
+  bool get isConfigured =>
+      defaultTimeout.isNotEmpty ||
+      promptSubmit.isNotEmpty ||
+      patchApply.isNotEmpty ||
+      runProfile.isNotEmpty;
+
+  factory BootstrapControlTimeoutView.fromMap(Map<String, dynamic> map) {
+    return BootstrapControlTimeoutView(
+      defaultTimeout: map['default']?.toString() ?? '',
+      promptSubmit: map['promptSubmit']?.toString() ?? '',
+      patchApply: map['patchApply']?.toString() ?? '',
+      runProfile: map['runProfile']?.toString() ?? '',
     );
   }
 }

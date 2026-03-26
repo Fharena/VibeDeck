@@ -61,6 +61,7 @@ func (s *HTTPServer) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 			Provider: inferProviderName(adapterInfo),
 			Ready:    adapterInfo.Ready,
 		},
+		ControlTimeouts:  s.config.ControlTimeouts.View(),
 		CurrentThreadID:  currentThreadID,
 		CurrentSessionID: currentSessionID,
 		RecentThreads:    recentThreads,

@@ -17,6 +17,10 @@ void main() {
     expect(controller.signalingBaseUrl, 'http://192.168.0.24:8081');
     expect(controller.bootstrap.workspaceRoot, 'C:/demo/workspace');
     expect(controller.bootstrap.adapter.provider, 'cursor');
+    expect(controller.bootstrap.controlTimeouts.defaultTimeout, '5s');
+    expect(controller.bootstrap.controlTimeouts.promptSubmit, '5m');
+    expect(controller.bootstrap.controlTimeouts.patchApply, '30s');
+    expect(controller.bootstrap.controlTimeouts.runProfile, '5m');
     expect(controller.currentThreadId, 'thread-bootstrap-1');
     expect(controller.currentSharedSessionId, 'sid-bootstrap');
     expect(controller.recentHosts, hasLength(1));
@@ -56,6 +60,12 @@ class FakeBootstrapAgentApi extends AgentApi {
         'mode': 'cursor_agent_cli',
         'provider': 'cursor',
         'ready': true,
+      },
+      'controlTimeouts': {
+        'default': '5s',
+        'promptSubmit': '5m',
+        'patchApply': '30s',
+        'runProfile': '5m',
       },
       'recentThreads': [
         {

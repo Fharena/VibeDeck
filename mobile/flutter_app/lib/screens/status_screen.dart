@@ -258,6 +258,32 @@ class _StatusScreenState extends State<StatusScreen> {
                         ? '-'
                         : bootstrap.currentThreadId,
                   ),
+                  if (bootstrap.controlTimeouts.isConfigured) ...[
+                    _InfoRow(
+                      label: 'control timeout 기본',
+                      value: bootstrap.controlTimeouts.defaultTimeout.isEmpty
+                          ? '-'
+                          : bootstrap.controlTimeouts.defaultTimeout,
+                    ),
+                    _InfoRow(
+                      label: 'control timeout prompt',
+                      value: bootstrap.controlTimeouts.promptSubmit.isEmpty
+                          ? '-'
+                          : bootstrap.controlTimeouts.promptSubmit,
+                    ),
+                    _InfoRow(
+                      label: 'control timeout patch',
+                      value: bootstrap.controlTimeouts.patchApply.isEmpty
+                          ? '-'
+                          : bootstrap.controlTimeouts.patchApply,
+                    ),
+                    _InfoRow(
+                      label: 'control timeout run',
+                      value: bootstrap.controlTimeouts.runProfile.isEmpty
+                          ? '-'
+                          : bootstrap.controlTimeouts.runProfile,
+                    ),
+                  ],
                   if (bootstrap.recentThreads.isNotEmpty) ...[
                     const SizedBox(height: 8),
                     Text('최근 스레드', style: Theme.of(context).textTheme.titleSmall),
