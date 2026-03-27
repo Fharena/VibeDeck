@@ -1778,7 +1778,7 @@ function renderThreadPanelHtml(nonce: string): string {
     input.search { background: #0e1219; }
     details { border: 1px solid var(--line-soft); border-radius: 12px; background: #12161d; }
     summary { cursor: pointer; padding: 10px 12px; color: var(--muted); }
-    pre { margin: 0; padding: 12px; background: #10141b; border: 1px solid var(--line-soft); border-radius: 12px; overflow: auto; white-space: pre-wrap; word-break: break-word; font-family: var(--font-mono); font-size: 12px; line-height: 1.55; max-height: 260px; }
+    pre { margin: 0; padding: 12px; background: #10141b; border: 1px solid var(--line-soft); border-radius: 12px; overflow: auto; white-space: pre-wrap; word-break: break-word; font-family: var(--font-mono); font-size: 12px; line-height: 1.55; max-height: 260px; color: #e1e8f3; }
     .layout { display: grid; grid-template-columns: 272px minmax(0, 1fr); min-height: 100vh; background: rgba(8, 10, 14, 0.28); }
     .main-shell { height: 100%; min-height: 0; display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; gap: 0; background: #111318; position: relative; }
     .chat-stack { min-height: 0; padding: 0 10px; display: grid; }
@@ -1893,9 +1893,11 @@ function renderThreadPanelHtml(nonce: string): string {
     .message-body h2 { font-size: 17px; }
     .message-body h3 { font-size: 15px; }
     .message-body strong { color: #f8fbff; font-weight: 700; }
-    .message-body code { font-family: var(--font-mono); font-size: 12px; background: #11161d; border: 1px solid #253040; border-radius: 6px; padding: 1px 5px; }
-    .message-body pre { margin: 10px 0; padding: 11px 12px; overflow: auto; background: #0d1319; border: 1px solid #253040; border-radius: 8px; }
-    .message-body pre code { padding: 0; border: 0; background: transparent; font-size: 12px; line-height: 1.65; }
+    .message-body a { color: #9dcbff; text-decoration: none; border-bottom: 1px solid rgba(157, 203, 255, 0.25); }
+    .message-body a:hover { color: #c6e1ff; border-bottom-color: rgba(198, 225, 255, 0.55); }
+    .message-body code { font-family: var(--font-mono); font-size: 12px; color: #e8eef8; background: #11161d; border: 1px solid #253040; border-radius: 6px; padding: 1px 5px; }
+    .message-body pre { margin: 10px 0; padding: 11px 12px; overflow: auto; background: #0d1319; border: 1px solid #253040; border-radius: 8px; color: #dde7f5; }
+    .message-body pre code { padding: 0; border: 0; background: transparent; font-size: 12px; line-height: 1.65; color: inherit; }
     .utility-panel { display: grid; gap: 12px; }
     .utility-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
     .utility-tab { border: 1px solid var(--line-soft); border-radius: 999px; padding: 8px 12px; background: #11151c; color: var(--muted); font-size: 12px; }
