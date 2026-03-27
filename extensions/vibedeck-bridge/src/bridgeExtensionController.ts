@@ -24,6 +24,14 @@ import {
   type LocalAgentStatus,
 } from "./localAgentController.js";
 import {
+  createLocalSignalingController,
+  readLocalSignalingSettings,
+  signalingBaseUrl as toLocalSignalingBaseUrl,
+  type LocalSignalingController,
+  type LocalSignalingSettings,
+  type LocalSignalingStatus,
+} from "./signalingController.js";
+import {
   createThreadPanelController,
   type ThreadPanelController,
   type ThreadPanelWebviewPanelLike,
@@ -167,6 +175,7 @@ interface BridgeSettings {
   commands: Partial<CursorBridgeCommands>;
   cursorAgent: CursorAgentCommandAdapterConfig;
   agent: LocalAgentSettings;
+  signaling: LocalSignalingSettings;
 }
 
 interface ActiveBridge {
@@ -200,6 +209,7 @@ export interface BridgeExtensionController {
 
 export interface BridgeExtensionControllerDependencies {
   localAgent?: LocalAgentController;
+  signaling?: LocalSignalingController;
 }
 
 interface CursorPromptSubmitRequest {
@@ -223,6 +233,7 @@ export function createBridgeExtensionController(
 class DefaultBridgeExtensionController implements BridgeExtensionController {
   private readonly vscode: BridgeExtensionVscodeLike;
   private readonly localAgent: LocalAgentController;
+  private readonly signaling: LocalSignalingController;
   private readonly threadPanel: ThreadPanelController;
   private readonly mobileBootstrap: MobileBootstrapController;
   private readonly cursorChatLinks: CursorChatLinkTracker;
@@ -239,6 +250,14 @@ class DefaultBridgeExtensionController implements BridgeExtensionController {
     this.localAgent =
       dependencies.localAgent ??
       createLocalAgentController({
+        onStateChange: () => {
+          this.updateStatusBar();
+          void this.threadPanel.refreshIfOpen();
+        },
+      });
+    this.signaling =
+      dependencies.signaling ??
+      createLocalSignalingController({
         onStateChange: () => {
           this.updateStatusBar();
           void this.threadPanel.refreshIfOpen();
@@ -278,6 +297,21 @@ class DefaultBridgeExtensionController implements BridgeExtensionController {
     context.subscriptions.push(
       this.vscode.commands.registerCommand("vibedeckBridge.startAgent", async () => {
         await this.startAgent(true);
+      }),
+    );
+    context.subscriptions.push(
+      this.vscode.commands.registerCommand("vibedeckBridge.startSignaling", async () => {
+        await this.startSignaling(true);
+      }),
+    );
+    context.subscriptions.push(
+      this.vscode.commands.registerCommand("vibedeckBridge.stopSignaling", async () => {
+        await this.stopSignaling(true);
+      }),
+    );
+    context.subscriptions.push(
+      this.vscode.commands.registerCommand("vibedeckBridge.restartSignaling", async () => {
+        await this.restartSignaling(true);
       }),
     );
     context.subscriptions.push(
@@ -455,6 +489,9 @@ class DefaultBridgeExtensionController implements BridgeExtensionController {
       }
 
       this.activeBridge = startedBridge;
+      if (startedBridge.settings.signaling.autoStart) {
+        await this.signaling.start(startedBridge.settings.signaling);
+      }
       if (startedBridge.settings.agent.autoStart) {
         await this.localAgent.start(startedBridge.settings.agent, startedBridge.address);
       }
@@ -482,6 +519,7 @@ class DefaultBridgeExtensionController implements BridgeExtensionController {
     this.lastBridgeError = undefined;
 
     await this.localAgent.stop();
+    await this.signaling.stop();
 
     if (bridge?.runtime) {
       bridge.runtime.dispose();
@@ -511,6 +549,9 @@ class DefaultBridgeExtensionController implements BridgeExtensionController {
     if (!this.activeBridge) {
       return;
     }
+    if (this.activeBridge.settings.signaling.autoStart) {
+      await this.signaling.start(this.activeBridge.settings.signaling);
+    }
 
     const status = await this.localAgent.start(this.readSettings().agent, this.activeBridge.address);
     this.updateStatusBar();
@@ -534,6 +575,9 @@ class DefaultBridgeExtensionController implements BridgeExtensionController {
     if (!this.activeBridge) {
       return;
     }
+    if (this.activeBridge.settings.signaling.autoStart) {
+      await this.signaling.start(this.activeBridge.settings.signaling);
+    }
 
     const status = await this.localAgent.start(this.readSettings().agent, this.activeBridge.address);
     this.updateStatusBar();
@@ -548,6 +592,13 @@ class DefaultBridgeExtensionController implements BridgeExtensionController {
     }
     if (!this.activeBridge) {
       return;
+    }
+
+    if (this.activeBridge.settings.signaling.autoStart) {
+      const signalingStatus = this.signaling.status();
+      if (signalingStatus.state !== "running" && signalingStatus.state !== "starting") {
+        await this.signaling.start(this.activeBridge.settings.signaling);
+      }
     }
 
     const status = this.localAgent.status();
@@ -582,6 +633,7 @@ class DefaultBridgeExtensionController implements BridgeExtensionController {
     }
 
     const agentStatus = this.localAgent.status();
+    const signalingStatus = this.signaling.status();
 
     if (!this.activeBridge) {
       if (this.lastBridgeError) {
@@ -590,6 +642,9 @@ class DefaultBridgeExtensionController implements BridgeExtensionController {
       } else if (agentStatus.state === "error") {
         this.statusBarItem.text = "VibeDeck: agent!";
         this.statusBarItem.tooltip = describeAgentStatus(agentStatus);
+      } else if (signalingStatus.state === "error") {
+        this.statusBarItem.text = "VibeDeck: sig!";
+        this.statusBarItem.tooltip = describeSignalingStatus(signalingStatus);
       } else {
         this.statusBarItem.text = "VibeDeck: stopped";
         this.statusBarItem.tooltip = "VibeDeck localhost bridge is stopped";
@@ -606,6 +661,9 @@ class DefaultBridgeExtensionController implements BridgeExtensionController {
     } else if (agentStatus.state === "error") {
       suffix = " | agent!";
     }
+    if (signalingStatus.state === "error") {
+      suffix += " | sig!";
+    }
 
     this.statusBarItem.text =
       `VibeDeck: ${this.activeBridge.address}${suffix}` +
@@ -618,6 +676,7 @@ class DefaultBridgeExtensionController implements BridgeExtensionController {
     const settings = this.readSettings();
     const address = resolveAddress(settings);
     const agentStatus = this.localAgent.status();
+    const signalingStatus = this.signaling.status();
 
     if (!this.activeBridge) {
       return formatBridgeStatusReport({
@@ -626,6 +685,7 @@ class DefaultBridgeExtensionController implements BridgeExtensionController {
         mode: settings.mode,
         settings,
         agentStatus,
+        signalingStatus,
         lastError: this.lastBridgeError,
       });
     }
@@ -640,7 +700,17 @@ class DefaultBridgeExtensionController implements BridgeExtensionController {
       config.get<string>("commandProvider") === "external"
         ? "external"
         : "builtin_cursor_agent";
-    const agentSettings = readLocalAgentSettings(config);
+    const rawAgentSettings = readLocalAgentSettings(config);
+    const signalingSettings = readLocalSignalingSettings(config, {
+      agentHost: rawAgentSettings.host,
+      goBin: rawAgentSettings.goBin,
+      repoRoot: rawAgentSettings.repoRoot,
+      legacyBaseUrl: rawAgentSettings.signalingBaseUrl,
+    });
+    const agentSettings: LocalAgentSettings = {
+      ...rawAgentSettings,
+      signalingBaseUrl: toLocalSignalingBaseUrl(signalingSettings),
+    };
     return {
       autoStart: config.get<boolean>("autoStart", true),
       mode: modeValue,
@@ -654,7 +724,51 @@ class DefaultBridgeExtensionController implements BridgeExtensionController {
         agentSettings,
       ),
       agent: agentSettings,
+      signaling: signalingSettings,
     };
+  }
+
+  private async startSignaling(showMessage: boolean): Promise<void> {
+    const settings = this.readSettings().signaling;
+    const status = await this.signaling.start(settings);
+    this.updateStatusBar();
+    if (showMessage) {
+      this.showSignalingStatusMessage(status);
+    }
+  }
+
+  private async stopSignaling(showMessage: boolean): Promise<void> {
+    await this.signaling.stop();
+    this.updateStatusBar();
+    if (showMessage) {
+      void this.vscode.window.showInformationMessage("VibeDeck signaling stopped");
+    }
+  }
+
+  private async restartSignaling(showMessage: boolean): Promise<void> {
+    const settings = this.readSettings().signaling;
+    const status = await this.signaling.start(settings);
+    this.updateStatusBar();
+    if (showMessage) {
+      this.showSignalingStatusMessage(status);
+    }
+  }
+
+  private showSignalingStatusMessage(status: LocalSignalingStatus): void {
+    const message = describeSignalingStatus(status);
+    if (status.state === "running") {
+      void this.vscode.window.showInformationMessage(message);
+      return;
+    }
+    if (status.state === "starting") {
+      void this.vscode.window.showWarningMessage(message);
+      return;
+    }
+    if (status.state === "error") {
+      void this.vscode.window.showErrorMessage(message);
+      return;
+    }
+    void this.vscode.window.showWarningMessage(message);
   }
 
   private asExtensionRuntimeVSCode(): VSCodeExtensionLike {
@@ -980,7 +1094,9 @@ class DefaultBridgeExtensionController implements BridgeExtensionController {
       mode: bridge.mode,
       settings: bridge.settings,
       agentStatus: this.localAgent.status(),
+      signalingStatus: this.signaling.status(),
       diagnostics: bridge.diagnostics,
+      lastError: this.lastBridgeError,
     });
   }
 }
@@ -1081,6 +1197,14 @@ function describeCommandDiagnostics(
     repoRoot: settings.agent.repoRoot,
     outputTail: [],
   };
+  const signalingStatus: LocalSignalingStatus = {
+    state: "stopped",
+    launchMode: settings.signaling.launchMode,
+    baseUrl: toLocalSignalingBaseUrl(settings.signaling),
+    command: settings.signaling.launchMode,
+    repoRoot: settings.signaling.repoRoot,
+    outputTail: [],
+  };
   const lines = [
     `VibeDeck 명령 진단: ${address}`,
     `명령 공급자: ${describeProvider(settings)}`,
@@ -1088,6 +1212,7 @@ function describeCommandDiagnostics(
     `필수 명령 준비: ${diagnostics.required.length - diagnostics.missingRequired.length}/${diagnostics.required.length}`,
     describeProviderTimeouts(settings),
     describeAgentStatus(agentStatus),
+    describeSignalingStatus(signalingStatus),
     describeAgentControlTimeouts(settings.agent),
   ];
 
@@ -1111,6 +1236,7 @@ function describeCommandDiagnostics(
     connected: false,
     settings,
     agentStatus,
+    signalingStatus,
     diagnostics,
   });
   if (guidance.length > 0) {
@@ -1162,6 +1288,27 @@ function describeAgentStatus(status: LocalAgentStatus): string {
   return lines.join("\n");
 }
 
+function describeSignalingStatus(status: LocalSignalingStatus): string {
+  const lines = [
+    `시그널링: ${describeSignalingRuntimeState(status.state)} (${status.baseUrl})`,
+    `signaling 실행 방식: ${status.launchMode}`,
+    `signaling 명령: ${status.command}`,
+  ];
+  if (status.repoRoot) {
+    lines.push(`signaling 저장소 루트: ${status.repoRoot}`);
+  }
+  if (status.pid) {
+    lines.push(`signaling PID: ${status.pid}`);
+  }
+  if (status.lastError) {
+    lines.push(`signaling 최근 오류: ${status.lastError}`);
+  }
+  if (status.outputTail.length > 0) {
+    lines.push(`signaling 출력: ${status.outputTail.join(" | ")}`);
+  }
+  return lines.join("\n");
+}
+
 function describeProviderTimeouts(settings: BridgeSettings): string {
   if (settings.mode !== "command" || settings.commandProvider !== "builtin_cursor_agent") {
     return "provider timeout: -";
@@ -1174,6 +1321,19 @@ function describeAgentControlTimeouts(settings: LocalAgentSettings): string {
 }
 
 function describeAgentRuntimeState(state: LocalAgentStatus["state"]): string {
+  switch (state) {
+    case "running":
+      return "실행 중";
+    case "starting":
+      return "시작 중";
+    case "error":
+      return "오류";
+    default:
+      return "중지됨";
+  }
+}
+
+function describeSignalingRuntimeState(state: LocalSignalingStatus["state"]): string {
   switch (state) {
     case "running":
       return "실행 중";
@@ -1330,6 +1490,7 @@ function formatBridgeStatusReport(options: {
   mode: BridgeMode;
   settings: BridgeSettings;
   agentStatus: LocalAgentStatus;
+  signalingStatus: LocalSignalingStatus;
   diagnostics?: BridgeCommandDiagnostics;
   lastError?: string;
 }): string {
@@ -1339,6 +1500,7 @@ function formatBridgeStatusReport(options: {
     `명령 공급자: ${describeProvider(options.settings)}`,
     describeProviderTimeouts(options.settings),
     describeAgentStatus(options.agentStatus),
+    describeSignalingStatus(options.signalingStatus),
     describeAgentControlTimeouts(options.settings.agent),
   ];
 
@@ -1387,6 +1549,7 @@ function collectSetupGuidance(options: {
   connected: boolean;
   settings: BridgeSettings;
   agentStatus: LocalAgentStatus;
+  signalingStatus: LocalSignalingStatus;
   diagnostics?: BridgeCommandDiagnostics;
   lastError?: string;
 }): string[] {
@@ -1394,7 +1557,9 @@ function collectSetupGuidance(options: {
   const issueText = [
     options.lastError,
     options.agentStatus.lastError,
+    options.signalingStatus.lastError,
     ...options.agentStatus.outputTail,
+    ...options.signalingStatus.outputTail,
   ]
     .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
     .join("\n")
@@ -1436,6 +1601,18 @@ function collectSetupGuidance(options: {
     addAction("`vibedeckBridge.agent.launchMode`를 `go_run` 또는 `binary`로 바꾸세요.");
   }
 
+  if (issueText.includes("signaling repo root is required for go_run mode")) {
+    addAction("`vibedeckBridge.signaling.repoRoot`를 VibeDeck 저장소 루트로 지정하거나, 저장소 폴더를 그대로 열어 다시 시도하세요.");
+  }
+
+  if (issueText.includes("signaling binary path is required for binary mode")) {
+    addAction("`vibedeckBridge.signaling.binaryPath`에 signaling 실행 파일 경로를 설정하세요.");
+  }
+
+  if (issueText.includes("signaling exited before ready") || issueText.includes("signaling ready timeout")) {
+    addAction("signaling 포트(기본 8081)가 이미 사용 중인지 확인하고, 필요하면 `vibedeckBridge.signaling.port`를 바꾸거나 기존 signaling 인스턴스를 정리하세요.");
+  }
+
   if (issueText.includes("authentication required") || issueText.includes("agent login")) {
     if (options.settings.cursorAgent.useWsl) {
       addAction(
@@ -1465,7 +1642,7 @@ function collectSetupGuidance(options: {
     addAction("선택 명령이 일부 빠져 있습니다. 패널이나 파일/터미널 표면이 비어 보이면 확장 빌드와 명령 등록 상태를 다시 확인하세요.");
   }
 
-  if (options.agentStatus.state === "error" && actions.length === 0) {
+  if ((options.agentStatus.state === "error" || options.signalingStatus.state === "error") && actions.length === 0) {
     addAction("아래 진단 명령으로 PC 환경을 점검한 뒤 extension을 다시 시작하세요.");
   }
 

@@ -34,12 +34,11 @@ npm --prefix .\extensions\vibedeck-bridge run smoke:bootstrap
 ```powershell
 npm --prefix .\adapters\cursor-bridge install
 npm --prefix .\adapters\cursor-bridge run build
-go run ./cmd/signaling
 go run ./cmd/relay
 go run ./cmd/agent
 ```
 
-이 수동 경로는 `fixtureBridgeMain.js`를 사용하므로 실제 Cursor 파일 수정 대신 흐름만 검증합니다.
+이 수동 경로는 `fixtureBridgeMain.js`를 사용하므로 실제 Cursor 파일 수정 대신 흐름만 검증합니다. 모바일 direct signaling/WebRTC 검증이 필요할 때만 `go run ./cmd/signaling`을 추가로 직접 띄우면 됩니다.
 
 ## 3. 실제 cursor-agent smoke
 
@@ -123,7 +122,6 @@ powershell -ExecutionPolicy Bypass -File .\scripts\gui_extension_host_smoke.ps1 
 같은 로컬 네트워크에서 모바일 앱을 붙일 때:
 
 ```powershell
-go run ./cmd/signaling
 go run ./cmd/relay
 go run ./cmd/agent
 cd .\mobile\flutter_app
@@ -135,7 +133,7 @@ cd .\mobile\flutter_app
 - Android 에뮬레이터: `10.0.2.2`
 - 실기기: PC LAN IP 사용
 - 실기기 + extension local agent 조합이면 Cursor 설정에서 `vibedeckBridge.agent.host=0.0.0.0`로 바꾸고 `VibeDeck: Restart Local Agent` 실행
-- `signaling` 서버는 `go run ./cmd/signaling`으로 별도 실행
+- `signaling`은 extension이 기본적으로 자동 기동한다. 수동 fixture 경로에서만 필요하면 `go run ./cmd/signaling`을 직접 실행
 - `VibeDeck: Open Mobile Bootstrap`으로 다시 연 QR/deep link는 `agent/signaling`뿐 아니라 현재 `session/thread` 기본값도 함께 넘긴다. 모바일에서 `thread not found`가 보이면 bootstrap을 다시 열고 QR을 재스캔한다.
 
 필수 확인 항목:

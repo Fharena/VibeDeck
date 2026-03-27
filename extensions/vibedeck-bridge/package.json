@@ -26,6 +26,9 @@
     "onCommand:vibedeckBridge.openThreadPanelInSidebar",
     "onCommand:vibedeckBridge.moveThreadPanelToAuxiliaryBar",
     "onCommand:vibedeckBridge.startAgent",
+    "onCommand:vibedeckBridge.startSignaling",
+    "onCommand:vibedeckBridge.stopSignaling",
+    "onCommand:vibedeckBridge.restartSignaling",
     "onCommand:vibedeckBridge.stopAgent",
     "onCommand:vibedeckBridge.restartAgent",
     "onCommand:vibedeckBridge.openMobileBootstrap",
@@ -82,6 +85,18 @@
       {
         "command": "vibedeckBridge.startAgent",
         "title": "VibeDeck: Start Local Agent"
+      },
+      {
+        "command": "vibedeckBridge.startSignaling",
+        "title": "VibeDeck: Start Local Signaling"
+      },
+      {
+        "command": "vibedeckBridge.stopSignaling",
+        "title": "VibeDeck: Stop Local Signaling"
+      },
+      {
+        "command": "vibedeckBridge.restartSignaling",
+        "title": "VibeDeck: Restart Local Signaling"
       },
       {
         "command": "vibedeckBridge.stopAgent",
@@ -384,7 +399,78 @@
         "vibedeckBridge.agent.signalingBaseUrl": {
           "type": "string",
           "default": "http://127.0.0.1:8081",
-          "description": "SIGNALING_BASE_URL passed to the local agent process."
+          "description": "로컬 agent가 참조할 signaling base URL입니다. signaling 자동 기동을 쓰면 기본적으로 signaling.host/port 값에서 자동 유도됩니다."
+        },
+        "vibedeckBridge.signaling.autoStart": {
+          "type": "boolean",
+          "default": true,
+          "description": "모바일 bootstrap/direct signaling에 필요한 로컬 signaling 서버를 bridge와 함께 자동으로 시작합니다."
+        },
+        "vibedeckBridge.signaling.launchMode": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "manual",
+            "go_run",
+            "binary"
+          ],
+          "default": "auto",
+          "description": "로컬 signaling launch 전략입니다. auto는 저장소 레이아웃이 보이면 go_run을, 아니면 manual을 고릅니다."
+        },
+        "vibedeckBridge.signaling.host": {
+          "type": "string",
+          "default": "",
+          "description": "로컬 signaling listen host입니다. 비워두면 agent.host 또는 기존 signaling base URL을 따라갑니다."
+        },
+        "vibedeckBridge.signaling.port": {
+          "type": "number",
+          "default": 8081,
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "로컬 signaling listen port입니다."
+        },
+        "vibedeckBridge.signaling.goBin": {
+          "type": "string",
+          "default": "",
+          "description": "launchMode=go_run일 때 사용할 Go 실행 파일입니다. 비워두면 agent.goBin 또는 go를 사용합니다."
+        },
+        "vibedeckBridge.signaling.repoRoot": {
+          "type": "string",
+          "default": "",
+          "description": "launchMode=go_run일 때 사용할 VibeDeck 저장소 루트입니다. 비워두면 agent.repoRoot를 따라갑니다."
+        },
+        "vibedeckBridge.signaling.binaryPath": {
+          "type": "string",
+          "default": "",
+          "description": "launchMode=binary일 때 사용할 signaling 실행 파일 경로입니다."
+        },
+        "vibedeckBridge.signaling.args": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "description": "로컬 signaling 프로세스에 추가로 넘길 인자 목록입니다."
+        },
+        "vibedeckBridge.signaling.extraEnv": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "description": "로컬 signaling 프로세스에 전달할 추가 환경변수 목록입니다. 형식은 KEY=VALUE 입니다."
+        },
+        "vibedeckBridge.signaling.pairingTtlMs": {
+          "type": "number",
+          "default": 120000,
+          "minimum": 1000,
+          "description": "로컬 signaling pairing TTL(ms)입니다."
+        },
+        "vibedeckBridge.signaling.readyTimeoutMs": {
+          "type": "number",
+          "default": 8000,
+          "minimum": 1000,
+          "description": "로컬 signaling health check 준비 timeout(ms)입니다."
         },
         "vibedeckBridge.agent.readyTimeoutMs": {
           "type": "number",

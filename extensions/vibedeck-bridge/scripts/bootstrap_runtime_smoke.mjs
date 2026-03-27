@@ -20,12 +20,22 @@ try {
   const panelMessages = [];
   let clipboardText = "";
   let agentServer;
+  let signalingStartCount = 0;
   let agentStatus = {
     state: "stopped",
     launchMode: "binary",
     baseUrl: agentBaseUrl,
     command: "fake-local-agent",
     pid: 4242,
+    repoRoot: tempRoot,
+    outputTail: [],
+  };
+  let signalingStatus = {
+    state: "stopped",
+    launchMode: "go_run",
+    baseUrl: "http://127.0.0.1:8081",
+    command: "fake-signaling",
+    pid: 4343,
     repoRoot: tempRoot,
     outputTail: [],
   };
@@ -225,8 +235,32 @@ try {
     },
   };
 
+  const fakeSignaling = {
+    async start() {
+      signalingStartCount += 1;
+      signalingStatus = {
+        ...signalingStatus,
+        state: "running",
+      };
+      return { ...signalingStatus, outputTail: [...signalingStatus.outputTail] };
+    },
+    async stop() {
+      signalingStatus = {
+        ...signalingStatus,
+        state: "stopped",
+      };
+    },
+    status() {
+      return { ...signalingStatus, outputTail: [...signalingStatus.outputTail] };
+    },
+    currentBaseUrl() {
+      return signalingStatus.baseUrl;
+    },
+  };
+
   const controller = createBridgeExtensionController(fakeVscode, {
     localAgent: fakeLocalAgent,
+    signaling: fakeSignaling,
   });
   const context = { subscriptions: [] };
 
@@ -252,8 +286,10 @@ try {
     await fakeVscode.commands.executeCommand("vibedeckBridge.showStatus");
     const statusMessage = messages.info.at(-1) ?? messages.warn.at(-1) ?? messages.error.at(-1) ?? "";
     assert.match(statusMessage, /로컬 agent: 실행 중/);
+    assert.match(statusMessage, /시그널링: 실행 중/);
     assert.match(statusMessage, new RegExp(`http://127\\.0\\.0\\.1:${agentPort}`));
     assert.match(statusMessage, /진단:/);
+    assert.ok(signalingStartCount >= 1, "bridge should auto-start signaling");
 
     console.log(
       JSON.stringify(
@@ -261,6 +297,7 @@ try {
           bridgeAddress,
           bridgeName,
           statusBarText: statusBarItems[0]?.text ?? "",
+          signalingStartCount,
           requestCounts,
           statusMessage,
         },
