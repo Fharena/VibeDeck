@@ -15,6 +15,7 @@ const controller = createBridgeExtensionController({
   },
   viewColumn: {
     one: vscode.ViewColumn.One,
+    beside: vscode.ViewColumn.Beside,
   },
 });
 

@@ -256,9 +256,16 @@
 - 2026-03-26 / 채팅 우선 UX 정리
   - extension shared threads를 `메인 채팅 + 세션 드로어` 구조로 다시 잘라 Cursor 채팅창처럼 기본 화면에는 대화와 composer만 남기도록 정리
   - 우측 보조 패널은 제거하고, 패치/실행/파일 상태는 채팅 안의 인라인 변경 카드와 결과 카드로 흡수
+  - `공유 세션 열기` 기본 동작을 에디터 오른쪽 탭(`ViewColumn.Beside`)으로 맞추고, 사이드바는 세션 진입/보조 표면으로 남기되 필요하면 다시 사이드바로 보내는 명령을 추가
+  - 웹뷰 전체 rerender 때 타임라인 스크롤이 상단으로 튀던 문제를 스크롤 위치 보존으로 수정하고, 레이아웃을 `얇은 상단 바 + 본문 스트림 + 하단 composer 도크` 구조로 정리해 IDE 하단 패널과 충돌하지 않게 조정
   - extension 타임라인은 사용자/에이전트 대화와 패치/실행 결과만 기본 피드에 남기고, `prompt_accepted`, `tool_activity`, `live_state`, `patch_apply`, `run_profile` 같은 운영성 이벤트는 기본 숨김으로 조정
   - 모바일은 `현재 작업` 카드에서 도구 활동/최근 오류를 기본 표면에서 빼고, `작업 로그`를 `대화와 결과` 피드로 바꿔 요청/응답/검토 결과만 남기도록 정리
   - 검증: `npm --prefix extensions/vibedeck-bridge run build` 통과, `npm --prefix extensions/vibedeck-bridge run smoke:panel` 통과, 변경 파일 대상 `flutter analyze` 통과, 안전 경로 `flutter_safe.ps1 test test/app_smoke_test.dart` 통과
+- 2026-03-27 / shared threads 오른쪽 도킹 흐름 정리
+  - `Open Shared Threads` 기본 동작을 에디터 탭보다 뷰 호스트 우선으로 바꿔, 한 번 오른쪽 보조 사이드바로 옮긴 뒤에는 계속 그 위치를 다시 열도록 정리
+  - extension 명령에 `공유 세션을 오른쪽 보조 사이드바로 배치`를 추가하고, 내부적으로 Cursor/VS Code의 `moveFocusedView` quick pick을 열어 `새 보조 사이드바 항목` 흐름으로 옮길 수 있게 연결
+  - 웹뷰 상단 액션도 `탭으로 열기/사이드바로` 대신 `도구처럼 쓰기/오른쪽 고정` 중심으로 바꿔, Cursor 네이티브 채팅과 더 비슷한 도킹 흐름으로 정리
+  - 검증: `npm --prefix extensions/vibedeck-bridge run build` 통과, `npm --prefix extensions/vibedeck-bridge run smoke:panel` 통과
 
 ## 다음 작업 우선순위
 

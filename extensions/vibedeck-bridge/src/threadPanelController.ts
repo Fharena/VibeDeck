@@ -77,11 +77,15 @@ export interface ThreadPanelVscodeLike {
   workspace: ThreadPanelWorkspaceLike;
   viewColumn: {
     one: number;
+    beside?: number;
   };
 }
 
 export interface ThreadPanelController {
   openOrReveal(): Promise<void>;
+  openInEditor(): Promise<void>;
+  openInSidebar(): Promise<void>;
+  moveToAuxiliaryBar(): Promise<void>;
   refreshIfOpen(): Promise<void>;
   dispose(): void;
 }
@@ -130,6 +134,7 @@ interface ThreadPanelDerivedState {
 interface ThreadPanelViewState {
   agentBaseUrl: string;
   autoRefreshMs: number;
+  hostMode: "sidebar" | "editor";
   composeMode: boolean;
   statusMessage: string;
   errorMessage: string;
@@ -197,11 +202,39 @@ class DefaultThreadPanelController implements ThreadPanelController {
   }
 
   async openOrReveal(): Promise<void> {
+    if (!this.preferPanelHost && this.viewRegistration) {
+      await this.openInSidebar();
+      return;
+    }
     if (this.preferPanelHost && this.panel) {
-      this.panel.reveal(this.vscode.viewColumn.one);
+      this.panel.reveal(this.vscode.viewColumn.beside ?? this.vscode.viewColumn.one);
       await this.refresh();
       return;
     }
+    if (this.panel) {
+      this.panel.reveal(this.vscode.viewColumn.beside ?? this.vscode.viewColumn.one);
+      await this.refresh();
+      return;
+    }
+
+    await this.openInEditor();
+  }
+
+  async openInEditor(): Promise<void> {
+    this.preferPanelHost = true;
+    if (this.panel) {
+      this.panel.reveal(this.vscode.viewColumn.beside ?? this.vscode.viewColumn.one);
+      await this.refresh();
+      return;
+    }
+    this.panel = this.createEditorPanel("vibedeckThreads", "VibeDeck 세션");
+    this.startEditorSync();
+    this.restartRefreshLoop();
+    await this.refresh();
+  }
+
+  async openInSidebar(): Promise<void> {
+    this.preferPanelHost = false;
     if (this.viewRegistration) {
       await this.revealSidebarView();
       if (this.view?.show) {
@@ -210,38 +243,48 @@ class DefaultThreadPanelController implements ThreadPanelController {
       await this.refreshIfOpen();
       return;
     }
-    if (this.panel) {
-      this.panel.reveal(this.vscode.viewColumn.one);
-      await this.refresh();
+    await this.openInEditor();
+  }
+
+  async moveToAuxiliaryBar(): Promise<void> {
+    const executeCommand = this.vscode.commands?.executeCommand;
+    if (typeof executeCommand !== "function") {
+      this.vscode.window.showWarningMessage(
+        "이 환경에서는 공유 세션을 오른쪽 보조 사이드바로 옮길 수 없습니다.",
+      );
       return;
     }
 
-    const panel = this.vscode.window.createWebviewPanel(
-      "vibedeckThreads",
-      "VibeDeck 세션",
-      this.vscode.viewColumn.one,
-      {
-        enableScripts: true,
-        retainContextWhenHidden: true,
-      },
+    await this.openInSidebar();
+    this.vscode.window.showInformationMessage(
+      "빠른 선택에서 '새 보조 사이드바 항목'을 선택하면 이후엔 오른쪽 도구 영역처럼 열립니다.",
     );
 
-    const nonce = randomBytes(16).toString("hex");
-    panel.webview.html = renderThreadPanelHtml(nonce);
-    panel.onDidDispose(() => {
-      this.panel = undefined;
-      this.stopRefreshLoop();
-      this.stopEditorSync();
-      this.stopSessionStream();
-    });
-    panel.webview.onDidReceiveMessage((message) => {
-      void this.handleMessage(message);
-    });
+    try {
+      await executeCommand(
+        "workbench.action.moveFocusedView",
+        DefaultThreadPanelController.sidebarViewId,
+      );
+    } catch (error) {
+      this.lastErrorMessage = describeError(error);
+      this.lastStatusMessage = "";
+      this.vscode.window.showWarningMessage(
+        "공유 세션 위치를 바꾸지 못했습니다: " + this.lastErrorMessage,
+      );
+      await this.refreshIfOpen();
+      return;
+    }
 
-    this.panel = panel;
-    this.startEditorSync();
-    this.restartRefreshLoop();
-    await this.refresh();
+    try {
+      await executeCommand("workbench.action.focusAuxiliaryBar");
+    } catch {
+      // 보조 사이드바 focus command가 없는 환경에서는 조용히 넘어간다.
+    }
+    try {
+      await executeCommand(`${DefaultThreadPanelController.sidebarViewId}.focus`);
+    } catch {
+      // 이동 후 자동 focus command가 없는 환경에서는 조용히 넘어간다.
+    }
   }
 
   async refreshIfOpen(): Promise<void> {
@@ -299,10 +342,51 @@ class DefaultThreadPanelController implements ThreadPanelController {
     void this.refresh();
   }
 
+  private createEditorPanel(viewType: string, title: string): ThreadPanelWebviewPanelLike {
+    const panel = this.vscode.window.createWebviewPanel(
+      viewType,
+      title,
+      this.vscode.viewColumn.beside ?? this.vscode.viewColumn.one,
+      {
+        enableScripts: true,
+        retainContextWhenHidden: true,
+      },
+    );
+
+    const nonce = randomBytes(16).toString("hex");
+    panel.webview.html = renderThreadPanelHtml(nonce);
+    panel.onDidDispose(() => {
+      if (this.panel !== panel) {
+        return;
+      }
+      this.panel = undefined;
+      this.preferPanelHost = false;
+      if (!this.view) {
+        this.stopRefreshLoop();
+        this.stopEditorSync();
+        this.stopSessionStream();
+        return;
+      }
+      void this.refresh();
+    });
+    panel.webview.onDidReceiveMessage((message) => {
+      void this.handleMessage(message);
+    });
+    return panel;
+  }
+
   private async revealSidebarView(): Promise<void> {
     const executeCommand = this.vscode.commands?.executeCommand;
     if (typeof executeCommand !== "function") {
       return;
+    }
+    try {
+      await executeCommand(`${DefaultThreadPanelController.sidebarViewId}.focus`);
+      if (this.view) {
+        return;
+      }
+    } catch {
+      // view가 아직 생성되지 않았으면 컨테이너 reveal로 한 번 더 시도한다.
     }
     try {
       await executeCommand(
@@ -323,6 +407,13 @@ class DefaultThreadPanelController implements ThreadPanelController {
       return this.panel;
     }
     return this.view ?? this.panel;
+  }
+
+  private currentHostMode(): "sidebar" | "editor" {
+    if (this.preferPanelHost || !this.view) {
+      return "editor";
+    }
+    return "sidebar";
   }
 
   private async refresh(): Promise<void> {
@@ -376,6 +467,7 @@ class DefaultThreadPanelController implements ThreadPanelController {
 
       const state = buildViewState({
         settings,
+        hostMode: this.currentHostMode(),
         adapter,
         runProfiles,
         threads,
@@ -399,6 +491,7 @@ class DefaultThreadPanelController implements ThreadPanelController {
       const state = buildFallbackState(
         settings,
         this.lastState,
+        this.currentHostMode(),
         describeError(error),
         this.lastStatusMessage,
         this.composeMode,
@@ -416,7 +509,6 @@ class DefaultThreadPanelController implements ThreadPanelController {
       switch (text(message.type)) {
         case "ready":
           this.viewReady = true;
-          this.preferPanelHost = false;
           if (this.sidebarReadyTimer) {
             clearTimeout(this.sidebarReadyTimer);
             this.sidebarReadyTimer = undefined;
@@ -424,6 +516,15 @@ class DefaultThreadPanelController implements ThreadPanelController {
           return;
         case "refresh":
           await this.refresh();
+          return;
+        case "open-in-editor":
+          await this.openInEditor();
+          return;
+        case "open-in-sidebar":
+          await this.openInSidebar();
+          return;
+        case "move-to-auxiliary":
+          await this.moveToAuxiliaryBar();
           return;
         case "new-thread": {
           const previousSessionId = this.currentSessionID();
@@ -749,6 +850,7 @@ class DefaultThreadPanelController implements ThreadPanelController {
         agentBaseUrl: previous?.agentBaseUrl || settings.agentBaseUrl,
         autoRefreshMs: previous?.autoRefreshMs || settings.autoRefreshMs,
       },
+      hostMode: this.currentHostMode(),
       adapter: previous?.adapter ?? {
         name: "",
         mode: "",
@@ -950,7 +1052,7 @@ class DefaultThreadPanelController implements ThreadPanelController {
     if (this.panel) {
       this.preferPanelHost = true;
       this.lastStatusMessage = statusMessage;
-      this.panel.reveal(this.vscode.viewColumn.one);
+      this.panel.reveal(this.vscode.viewColumn.beside ?? this.vscode.viewColumn.one);
       await this.refresh();
       return;
     }
@@ -1004,6 +1106,7 @@ class DefaultThreadPanelController implements ThreadPanelController {
 
 function buildViewState(input: {
   settings: ThreadPanelSettings;
+  hostMode: "sidebar" | "editor";
   adapter: AgentPanelAdapterRuntime;
   runProfiles: AgentPanelRunProfile[];
   threads: AgentPanelThreadSummary[];
@@ -1019,6 +1122,7 @@ function buildViewState(input: {
   return {
     agentBaseUrl: input.settings.agentBaseUrl,
     autoRefreshMs: input.settings.autoRefreshMs,
+    hostMode: input.hostMode,
     composeMode: input.composeMode,
     statusMessage: input.statusMessage,
     errorMessage: input.errorMessage,
@@ -1038,6 +1142,7 @@ function buildViewState(input: {
 function buildFallbackState(
   settings: ThreadPanelSettings,
   previous: ThreadPanelViewState | undefined,
+  hostMode: "sidebar" | "editor",
   errorMessage: string,
   statusMessage: string,
   composeMode: boolean,
@@ -1047,6 +1152,7 @@ function buildFallbackState(
     return {
       agentBaseUrl: settings.agentBaseUrl,
       autoRefreshMs: settings.autoRefreshMs,
+      hostMode,
       composeMode,
       statusMessage,
       errorMessage,
@@ -1067,6 +1173,7 @@ function buildFallbackState(
     ...previous,
     agentBaseUrl: settings.agentBaseUrl,
     autoRefreshMs: settings.autoRefreshMs,
+    hostMode,
     composeMode,
     statusMessage,
     errorMessage,
@@ -1646,29 +1753,30 @@ function renderThreadPanelHtml(nonce: string): string {
   <style>
     :root { color-scheme: dark; --bg: #111318; --shell: #16191f; --sidebar: #0f1218; --panel: #181b22; --panel-elevated: #1d212a; --panel-soft: #141820; --line: #2a2f3a; --line-soft: #232833; --text: #eef2ff; --muted: #9ea6b6; --accent: #7cb8ff; --accent-soft: rgba(124, 184, 255, 0.14); --accent-strong: #9dcbff; --ok: #7fd8a4; --bad: #ff8f93; --warn: #f2c66b; --focus: #7cb8ff; --font-sans: "Segoe UI", Inter, "Noto Sans KR", system-ui, sans-serif; --font-mono: Consolas, "SFMono-Regular", "Cascadia Code", monospace; }
     * { box-sizing: border-box; }
-    body { margin: 0; background: radial-gradient(circle at top, #1a1f29 0%, var(--bg) 32%); color: var(--text); font-family: var(--font-sans); }
+    html, body, #app { height: 100%; }
+    body { margin: 0; overflow: hidden; background: #111318; color: var(--text); font-family: var(--font-sans); }
     button, textarea, select, input { font: inherit; }
-    button, select, textarea, input { border: 1px solid var(--line); border-radius: 12px; background: var(--panel-soft); color: var(--text); }
-    button { padding: 10px 13px; cursor: pointer; transition: background 120ms ease, border-color 120ms ease, transform 120ms ease; }
+    button, select, textarea, input { border: 1px solid var(--line); border-radius: 10px; background: var(--panel-soft); color: var(--text); }
+    button { padding: 9px 12px; cursor: pointer; transition: background 120ms ease, border-color 120ms ease, transform 120ms ease; }
     button:hover { border-color: #394153; background: #1c212c; }
     button.primary { background: linear-gradient(180deg, #2b4f7c 0%, #23456f 100%); color: #f7fbff; border-color: #426998; font-weight: 700; }
     button.secondary { background: #1d212a; }
     button.ghost { background: transparent; }
     button.block { width: 100%; }
-    textarea { width: 100%; min-height: 108px; padding: 14px; resize: vertical; background: #12161e; }
+    textarea { width: 100%; min-height: 84px; padding: 12px 13px; resize: vertical; background: #12161e; line-height: 1.6; }
     select, input { width: 100%; padding: 10px 12px; }
     input.search { background: #0e1219; }
     details { border: 1px solid var(--line-soft); border-radius: 12px; background: #12161d; }
     summary { cursor: pointer; padding: 10px 12px; color: var(--muted); }
     pre { margin: 0; padding: 12px; background: #10141b; border: 1px solid var(--line-soft); border-radius: 12px; overflow: auto; white-space: pre-wrap; word-break: break-word; font-family: var(--font-mono); font-size: 12px; line-height: 1.55; max-height: 260px; }
     .layout { display: grid; grid-template-columns: 272px minmax(0, 1fr); min-height: 100vh; background: rgba(8, 10, 14, 0.28); }
-    .main-shell { min-height: 100vh; display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; gap: 12px; background: rgba(8, 10, 14, 0.28); padding: 14px 16px; position: relative; }
-    .chat-stack { min-height: 0; }
-    .topbar-shell { position: sticky; top: 0; z-index: 3; }
+    .main-shell { height: 100%; min-height: 0; display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; gap: 0; background: #111318; position: relative; }
+    .chat-stack { min-height: 0; padding: 0 18px; display: grid; }
+    .topbar-shell { position: sticky; top: 0; z-index: 3; padding: 10px 18px 8px; border-bottom: 1px solid var(--line-soft); background: rgba(17, 19, 24, 0.98); backdrop-filter: blur(10px); }
     .topbar { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; }
     .topbar-main { min-width: 0; display: grid; gap: 4px; }
-    .topbar-title { font-size: 16px; font-weight: 700; line-height: 1.35; color: #f4f7fb; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .topbar-subtitle { color: var(--muted); font-size: 12px; line-height: 1.5; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden; }
+    .topbar-title { font-size: 15px; font-weight: 700; line-height: 1.35; color: #f4f7fb; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .topbar-subtitle { color: var(--muted); font-size: 11px; line-height: 1.45; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden; }
     .topbar-actions { display: flex; gap: 8px; align-items: center; }
     .toolbar-button { border-radius: 8px; padding: 8px 12px; background: #11151c; border: 1px solid var(--line-soft); color: #dfe6f7; font-size: 12px; }
     .toolbar-button.active { border-color: rgba(124, 184, 255, 0.35); background: #1a2230; }
@@ -1676,7 +1784,7 @@ function renderThreadPanelHtml(nonce: string): string {
     .main { padding: 14px 16px; display: grid; gap: 12px; align-content: start; min-width: 0; }
     .workspace-shell { display: grid; gap: 12px; align-items: start; }
     .chat-shell { display: grid; gap: 12px; min-width: 0; }
-    .card { border: 1px solid var(--line); border-radius: 12px; background: #151a21; padding: 14px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14); }
+    .card { border: 1px solid var(--line); border-radius: 10px; background: #151a21; padding: 12px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14); }
     .card.flat { background: #151a21; box-shadow: none; }
     .stack { display: grid; gap: 12px; }
     .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
@@ -1705,7 +1813,7 @@ function renderThreadPanelHtml(nonce: string): string {
     .badge.bad { color: var(--bad); }
     .badge.warn { color: var(--warn); }
     .sidebar-summary { border: 1px solid var(--line-soft); border-radius: 14px; padding: 12px; background: #11151d; }
-    .composer-shell { display: grid; gap: 12px; }
+    .composer-shell { display: grid; gap: 10px; }
     .composer-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
     .checkbox-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 0 12px 12px; }
     .checkbox { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
@@ -1728,21 +1836,24 @@ function renderThreadPanelHtml(nonce: string): string {
     .session-bar .session-title { font-size: 18px; font-weight: 700; line-height: 1.35; }
     .session-bar .session-summary { color: var(--muted); font-size: 13px; line-height: 1.6; max-width: 920px; }
     .session-meta { display: flex; flex-wrap: wrap; gap: 8px 12px; color: var(--muted); font-size: 12px; }
-    .chat-panel { display: grid; gap: 12px; }
-    .timeline-card { min-height: 420px; }
-    .timeline { align-content: start; }
-    .message { border: 1px solid var(--line-soft); border-radius: 10px; padding: 12px 14px; background: #141922; display: grid; gap: 10px; }
-    .message.user { margin-left: 38px; background: #182130; border-color: rgba(105, 149, 206, 0.28); }
-    .message.assistant { margin-right: 38px; background: #151920; }
-    .message.system { background: #14181f; border-style: dashed; }
+    .chat-panel { min-height: 0; display: grid; gap: 8px; padding: 12px 0 8px; }
+    .timeline-card { min-height: 0; }
+    .timeline { align-content: start; display: grid; gap: 14px; min-height: 0; height: 100%; max-height: none; overflow: auto; padding: 6px 4px 18px 0; }
+    .message { display: grid; gap: 8px; }
+    .message.user { margin-left: 28px; border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; background: #151b24; }
+    .message.assistant { margin-right: 0; padding: 0 0 6px; }
+    .message.system { padding: 0 0 6px; }
     .message-meta { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
-    .message-author { display: flex; gap: 10px; align-items: flex-start; }
+    .message-author { display: flex; gap: 8px; align-items: flex-start; }
     .avatar { width: 24px; height: 24px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; background: #0f131b; border: 1px solid var(--line-soft); color: var(--accent-strong); font-size: 11px; font-weight: 700; flex: none; }
     .message.user .avatar { color: #d7e9ff; border-color: rgba(105, 149, 206, 0.34); }
-    .message-label { font-size: 12px; font-weight: 700; }
-    .message-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
-    .message-title { font-size: 13px; font-weight: 600; line-height: 1.5; }
-    .message-body { color: #dfe6f7; font-size: 13px; line-height: 1.65; }
+    .message.assistant .avatar, .message.system .avatar { display: none; }
+    .message.assistant .message-author, .message.system .message-author { gap: 0; }
+    .message.assistant .message-label, .message.system .message-label { font-size: 11px; color: #a9b5c6; letter-spacing: 0.04em; text-transform: uppercase; }
+    .message.user .message-label { font-size: 12px; font-weight: 700; }
+    .message-sub { font-size: 11px; color: var(--muted); margin-top: 1px; }
+    .message-title { font-size: 15px; font-weight: 700; line-height: 1.45; color: #f2f5fb; }
+    .message-body { color: #e2e8f5; font-size: 14px; line-height: 1.78; }
     .message-body code { font-family: var(--font-mono); }
     .message-chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
     .utility-panel { display: grid; gap: 12px; }
@@ -1759,7 +1870,7 @@ function renderThreadPanelHtml(nonce: string): string {
     .drawer-subtitle { color: var(--muted); font-size: 12px; line-height: 1.45; }
     .drawer-close { border-radius: 8px; padding: 6px 10px; background: #11151c; border: 1px solid var(--line-soft); color: var(--muted); font-size: 12px; }
     .drawer-content { display: grid; gap: 12px; }
-    .change-card { border: 1px solid #2d3644; border-radius: 10px; background: #10161d; overflow: hidden; }
+    .change-card { border: 1px solid #2d3644; border-radius: 10px; background: #10161d; overflow: hidden; margin-top: 2px; }
     .change-card-header { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--line-soft); background: #111820; }
     .change-card-title { font-size: 13px; font-weight: 700; color: #eef3fb; }
     .change-card-delta { display: flex; gap: 10px; font-size: 12px; font-weight: 700; }
@@ -1770,12 +1881,12 @@ function renderThreadPanelHtml(nonce: string): string {
     .change-file-row:first-child { border-top: 0; }
     .change-file-name { min-width: 0; font-size: 13px; line-height: 1.45; color: #eef3fb; word-break: break-all; }
     .change-file-stats { display: inline-flex; gap: 10px; font-size: 12px; font-weight: 700; }
-    .change-preview { margin: 0 14px 14px; border: 1px solid #334055; border-radius: 10px; overflow: hidden; background: #0f151c; }
+    .change-preview { margin: 0 14px 12px; border: 1px solid #334055; border-radius: 10px; overflow: hidden; background: #0f151c; }
     .change-preview-head { display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 10px 12px; background: #121a23; border-bottom: 1px solid #334055; }
     .change-preview-title { min-width: 0; font-size: 12px; font-weight: 600; color: #eef3fb; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .change-preview-body { padding: 12px; font-family: var(--font-mono); font-size: 12px; line-height: 1.55; color: #d8e2f1; white-space: pre-wrap; word-break: break-word; }
-    .change-actions { display: flex; gap: 8px; flex-wrap: wrap; padding: 0 14px 14px; }
-    .timeline { align-content: start; max-height: calc(100vh - 300px); overflow: auto; padding-right: 4px; }
+    .change-actions { display: flex; gap: 8px; flex-wrap: wrap; padding: 0 14px 12px; }
+    .composer-dock { border-top: 1px solid var(--line-soft); background: rgba(17, 19, 24, 0.98); backdrop-filter: blur(10px); padding: 10px 18px 14px; }
     @media (max-width: 1180px) { .two-col, .checkbox-grid { grid-template-columns: 1fr; } .message.user, .message.assistant { margin-left: 0; margin-right: 0; } }
     @media (max-width: 960px) { .layout { grid-template-columns: 1fr; } .sidebar { border-right: 0; border-bottom: 1px solid var(--line); } .main-shell { padding-left: 12px; padding-right: 12px; } .panel-drawer { width: calc(100vw - 20px); left: 10px; } .change-file-row { grid-template-columns: 1fr; } }
   </style>
@@ -1812,6 +1923,7 @@ function renderThreadPanelHtml(nonce: string): string {
     let selectedRunProfileId = "";
     let threadFilter = "";
     let showThreadDrawer = false;
+    let timelineScrollState = { top: 0, distanceFromBottom: 0 };
     let contextOptions = {
       includeActiveFile: true,
       includeSelection: false,
@@ -1839,6 +1951,18 @@ function renderThreadPanelHtml(nonce: string): string {
       const action = target.dataset.action;
       if (action === "refresh") {
         post("refresh");
+        return;
+      }
+      if (action === "open-in-editor") {
+        post("open-in-editor");
+        return;
+      }
+      if (action === "open-in-sidebar") {
+        post("open-in-sidebar");
+        return;
+      }
+      if (action === "move-to-auxiliary") {
+        post("move-to-auxiliary");
         return;
       }
       if (action === "toggle-thread-drawer") {
@@ -1953,28 +2077,31 @@ function renderThreadPanelHtml(nonce: string): string {
       if (!app) {
         return;
       }
+      rememberTimelineScroll();
       const promptValue = draftPrompt || (state.composeMode ? "" : (state.live.composer.draftText || state.derived.promptText));
       app.innerHTML = [
         '<div class="main-shell">',
         renderBanner(),
-        '  <section class="card flat topbar-shell">' + renderTopBar() + '</section>',
+        '  <section class="topbar-shell">' + renderTopBar() + '</section>',
         '  <section class="chat-stack">',
-        '    <section class="card chat-panel timeline-card">' + renderTimeline() + '</section>',
+        '    <section class="chat-panel timeline-card">' + renderTimeline() + '</section>',
         '  </section>',
-        '  <section class="card flat">' + renderComposer(promptValue) + '</section>',
+        '  <section class="composer-dock">' + renderComposer(promptValue) + '</section>',
         renderThreadDrawer(),
         '</div>',
       ].join('');
+      restoreTimelineScroll();
     }
 
     function renderTopBar() {
       const title = state.composeMode ? '새 세션' : ((state.currentThread && state.currentThread.title) || '세션을 선택하세요');
       const summary = state.live.activity.summary || ((state.currentThread && state.currentThread.lastEventText) || '채팅을 시작하면 결과가 여기에 이어집니다.');
+      const dockLabel = state.hostMode === 'editor' ? '도구처럼 쓰기' : '오른쪽 고정';
       return [
         '<div class="topbar">',
         '  <div class="topbar-actions"><button class="toolbar-button ' + (showThreadDrawer ? 'active' : '') + '" data-action="toggle-thread-drawer">세션</button></div>',
         '  <div class="topbar-main"><div class="topbar-title">' + esc(title) + '</div><div class="topbar-subtitle">' + esc(summary) + '</div></div>',
-        '  <div class="topbar-actions"><button class="toolbar-button" data-action="refresh">새로고침</button><button class="toolbar-button" data-action="new-thread">새 세션</button></div>',
+        '  <div class="topbar-actions"><button class="toolbar-button" data-action="move-to-auxiliary">' + dockLabel + '</button><button class="toolbar-button" data-action="new-thread">새 세션</button></div>',
         '</div>',
       ].join('');
     }
@@ -2082,11 +2209,10 @@ function renderThreadPanelHtml(nonce: string): string {
     function renderComposer(promptValue) {
       return [
         '<div class="composer-shell">',
-        '<div class="section-head"><div><div class="title">메시지</div><div class="muted">필요한 요청만 적고 바로 보내세요.</div></div><span class="badge">' + esc(state.composeMode ? '새 세션' : '현재 세션') + '</span></div>',
         '<textarea id="prompt-input" placeholder="예: src/hello.py 파일에 간단한 스크립트를 추가해줘">' + esc(promptValue) + '</textarea>',
         '<div class="composer-actions">',
         '  <button class="primary" data-action="submit-prompt">전송</button>',
-        '  <span class="utility-hint">변경사항과 실행 결과는 대화 안에서 바로 보여줍니다.</span>',
+        '  <span class="utility-hint">' + esc(state.composeMode ? '새 세션으로 전송됩니다.' : '현재 세션에 이어서 전송됩니다.') + '</span>',
         '</div>',
         '<details><summary>고급 옵션</summary><div class="checkbox-grid">',
         renderCheckbox('includeActiveFile', '현재 파일', contextOptions.includeActiveFile),
@@ -2203,7 +2329,7 @@ function renderThreadPanelHtml(nonce: string): string {
       if (!events.length) {
         return '<div class="empty">아직 대화와 작업 로그가 없습니다.</div>';
       }
-      return '<div class="timeline">' + events.map(function(item) {
+      return '<div class="timeline" data-role="timeline">' + events.map(function(item) {
         const role = normalizedRole(item);
         const headline = eventHeadline(item, role);
         const content = eventBody(item, headline);
@@ -2214,6 +2340,31 @@ function renderThreadPanelHtml(nonce: string): string {
         }
         return '<article class="message ' + role + '"><div class="message-meta"><div class="message-author"><span class="avatar">' + esc(roleGlyph(role)) + '</span><div><div class="message-label">' + esc(roleLabel(role)) + '</div><div class="message-sub">' + esc(fmt(item.at, true)) + '</div></div></div><div class="message-chips">' + chips.join('') + '</div></div>' + (headline ? '<div class="message-title">' + esc(headline) + '</div>' : '') + (content ? '<div class="message-body">' + nl2br(content) + '</div>' : '') + attachment + '</article>';
       }).join('') + '</div>';
+    }
+
+    function rememberTimelineScroll() {
+      const timeline = document.querySelector('[data-role="timeline"]');
+      if (!(timeline instanceof HTMLElement)) {
+        return;
+      }
+      timelineScrollState = {
+        top: timeline.scrollTop,
+        distanceFromBottom: Math.max(0, timeline.scrollHeight - timeline.clientHeight - timeline.scrollTop),
+      };
+    }
+
+    function restoreTimelineScroll() {
+      const timeline = document.querySelector('[data-role="timeline"]');
+      if (!(timeline instanceof HTMLElement)) {
+        return;
+      }
+      const maxTop = Math.max(0, timeline.scrollHeight - timeline.clientHeight);
+      if (timelineScrollState.distanceFromBottom <= 40) {
+        timeline.scrollTop = Math.max(0, maxTop - timelineScrollState.distanceFromBottom);
+      } else {
+        timeline.scrollTop = Math.min(timelineScrollState.top, maxTop);
+      }
+      timeline.addEventListener('scroll', rememberTimelineScroll, { passive: true });
     }
 
     function compactThreadPreview(thread) {

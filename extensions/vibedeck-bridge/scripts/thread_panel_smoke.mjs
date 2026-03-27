@@ -250,6 +250,7 @@ const agentBaseUrl = `http://127.0.0.1:${address.port}`;
 
 const messages = { info: [], warn: [], error: [] };
 const commandRegistry = new Map();
+const builtinCommands = [];
 const panelMessages = [];
 const activeEditorListeners = [];
 const selectionListeners = [];
@@ -299,6 +300,7 @@ const fakeView = {
 const fakeVscode = {
   commands: {
     async executeCommand(command, ...args) {
+      builtinCommands.push(command);
       if (command === "workbench.view.extension.vibedeckBridge") {
         const provider = viewProviders.get("vibedeckBridge.sharedThreads");
         if (provider) {
@@ -307,6 +309,12 @@ const fakeVscode = {
         return undefined;
       }
       if (command === "vibedeckBridge.sharedThreads.focus") {
+        return undefined;
+      }
+      if (command === "workbench.action.moveFocusedView") {
+        return undefined;
+      }
+      if (command === "workbench.action.focusAuxiliaryBar") {
         return undefined;
       }
       return await commandRegistry.get(command)(...args);
@@ -369,7 +377,9 @@ const fakeVscode = {
         },
       };
     },
-    createWebviewPanel() {
+    createWebviewPanel(_viewType, title, _column, options) {
+      fakePanel.title = title;
+      fakePanel.webview.options = options;
       return fakePanel;
     },
   },
@@ -402,7 +412,7 @@ const fakeVscode = {
     },
   },
   statusBarAlignment: { left: 1 },
-  viewColumn: { one: 1 },
+  viewColumn: { one: 1, beside: 2 },
 };
 
 const controller = createBridgeExtensionController(fakeVscode);
@@ -413,12 +423,14 @@ try {
   await fakeVscode.commands.executeCommand("vibedeckBridge.openThreadPanel");
   await tick();
 
-  assert.match(fakeView.webview.html, /세션/);
-  assert.match(fakeView.webview.html, /새 세션/);
-  assert.match(fakeView.webview.html, /메시지/);
-  assert.match(fakeView.webview.html, /변경 반영/);
-  assert.equal(fakeView.webview.options.enableScripts, true);
-  const embeddedScript = fakeView.webview.html.match(/<script nonce="[^"]*">([\s\S]*)<\/script>/)?.[1] ?? "";
+  const activeHost = fakePanel.webview.html ? fakePanel.webview : fakeView.webview;
+  assert.match(activeHost.html, /세션/);
+  assert.match(activeHost.html, /새 세션/);
+  assert.match(activeHost.html, /메시지/);
+  assert.match(activeHost.html, /변경 반영/);
+  assert.match(activeHost.html, /도구처럼 쓰기|오른쪽 고정/);
+  assert.equal(activeHost.options.enableScripts, true);
+  const embeddedScript = activeHost.html.match(/<script nonce="[^"]*">([\s\S]*)<\/script>/)?.[1] ?? "";
   assert.ok(embeddedScript, "thread panel html should include inline webview script");
   assert.doesNotThrow(() => new vm.Script(embeddedScript), "thread panel inline script should parse");
   await waitFor(() => panelMessages.length > 0);
@@ -452,6 +464,12 @@ try {
 
   await panelMessageHandler({ type: "update-draft", prompt: "shared smoke draft" });
   await waitFor(() => (panelMessages.at(-1)?.state?.live?.composer?.draftText || "") === "shared smoke draft");
+
+  await fakeVscode.commands.executeCommand("vibedeckBridge.moveThreadPanelToAuxiliaryBar");
+  assert.ok(
+    builtinCommands.includes("workbench.action.moveFocusedView"),
+    "right-dock command should trigger moveFocusedView",
+  );
 
   await panelMessageHandler({ type: "apply-patch" });
   await waitFor(() => (panelMessages.at(-1)?.state?.derived?.patchResultStatus || "") === "failed");

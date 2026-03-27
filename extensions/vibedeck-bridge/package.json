@@ -22,6 +22,9 @@
     "onCommand:vibedeckBridge.copyAgentEnv",
     "onCommand:vibedeckBridge.copySmokeCommand",
     "onCommand:vibedeckBridge.openThreadPanel",
+    "onCommand:vibedeckBridge.openThreadPanelInEditor",
+    "onCommand:vibedeckBridge.openThreadPanelInSidebar",
+    "onCommand:vibedeckBridge.moveThreadPanelToAuxiliaryBar",
     "onCommand:vibedeckBridge.startAgent",
     "onCommand:vibedeckBridge.stopAgent",
     "onCommand:vibedeckBridge.restartAgent",
@@ -50,6 +53,20 @@
           "type": "webview",
           "id": "vibedeckBridge.sharedThreads",
           "name": "공유 세션"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "vibedeckBridge.moveThreadPanelToAuxiliaryBar",
+          "when": "view == vibedeckBridge.sharedThreads",
+          "group": "navigation@1"
+        },
+        {
+          "command": "vibedeckBridge.openThreadPanelInEditor",
+          "when": "view == vibedeckBridge.sharedThreads",
+          "group": "navigation@2"
         }
       ]
     },
@@ -93,6 +110,18 @@
       {
         "command": "vibedeckBridge.openThreadPanel",
         "title": "VibeDeck: Open Shared Threads"
+      },
+      {
+        "command": "vibedeckBridge.openThreadPanelInEditor",
+        "title": "VibeDeck: 공유 세션을 탭으로 열기"
+      },
+      {
+        "command": "vibedeckBridge.openThreadPanelInSidebar",
+        "title": "VibeDeck: 공유 세션을 뷰 호스트로 열기"
+      },
+      {
+        "command": "vibedeckBridge.moveThreadPanelToAuxiliaryBar",
+        "title": "VibeDeck: 공유 세션을 오른쪽 보조 사이드바로 배치"
       },
       {
         "command": "vibedeckBridge.openMobileBootstrap",

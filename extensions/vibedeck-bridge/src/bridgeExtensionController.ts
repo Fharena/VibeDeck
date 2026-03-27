@@ -154,6 +154,7 @@ export interface BridgeExtensionVscodeLike {
   };
   viewColumn: {
     one: number;
+    beside?: number;
   };
 }
 
@@ -313,6 +314,24 @@ class DefaultBridgeExtensionController implements BridgeExtensionController {
       this.vscode.commands.registerCommand("vibedeckBridge.openThreadPanel", async () => {
         await this.threadPanel.openOrReveal();
       }),
+    );
+    context.subscriptions.push(
+      this.vscode.commands.registerCommand("vibedeckBridge.openThreadPanelInEditor", async () => {
+        await this.threadPanel.openInEditor();
+      }),
+    );
+    context.subscriptions.push(
+      this.vscode.commands.registerCommand("vibedeckBridge.openThreadPanelInSidebar", async () => {
+        await this.threadPanel.openInSidebar();
+      }),
+    );
+    context.subscriptions.push(
+      this.vscode.commands.registerCommand(
+        "vibedeckBridge.moveThreadPanelToAuxiliaryBar",
+        async () => {
+          await this.threadPanel.moveToAuxiliaryBar();
+        },
+      ),
     );
     context.subscriptions.push(
       this.vscode.commands.registerCommand("vibedeckBridge.openMobileBootstrap", async () => {
