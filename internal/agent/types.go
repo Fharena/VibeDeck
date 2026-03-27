@@ -29,9 +29,11 @@ type WorkspaceContext struct {
 }
 
 type SubmitTaskInput struct {
-	Prompt   string           `json:"prompt"`
-	Template string           `json:"template,omitempty"`
-	Context  WorkspaceContext `json:"context"`
+	Prompt         string           `json:"prompt"`
+	Template       string           `json:"template,omitempty"`
+	Model          string           `json:"model,omitempty"`
+	ReasoningLevel string           `json:"reasoningLevel,omitempty"`
+	Context        WorkspaceContext `json:"context"`
 }
 
 type ProviderVisibleEvent struct {

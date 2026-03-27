@@ -155,6 +155,8 @@ interface ThreadPanelMessage {
   type: string;
   threadId?: unknown;
   prompt?: unknown;
+  model?: unknown;
+  reasoningLevel?: unknown;
   profileId?: unknown;
   path?: unknown;
   line?: unknown;
@@ -595,6 +597,8 @@ class DefaultThreadPanelController implements ThreadPanelController {
     const envelope = this.newEnvelope(this.currentSessionID(), "PROMPT_SUBMIT", {
       threadId: this.composeMode ? undefined : this.selectedThreadId || undefined,
       prompt,
+      model: text(message.model).trim() || undefined,
+      reasoningLevel: text(message.reasoningLevel).trim() || undefined,
       contextOptions: sanitizeContextOptions(message.contextOptions),
     });
 
@@ -1774,7 +1778,7 @@ function renderThreadPanelHtml(nonce: string): string {
     input.search { background: #0e1219; }
     details { border: 1px solid var(--line-soft); border-radius: 12px; background: #12161d; }
     summary { cursor: pointer; padding: 10px 12px; color: var(--muted); }
-    pre { margin: 0; padding: 12px; background: #10141b; border: 1px solid var(--line-soft); border-radius: 12px; overflow: auto; white-space: pre-wrap; word-break: break-word; font-family: var(--font-mono); font-size: 12px; line-height: 1.55; max-height: 260px; }
+    pre { margin: 0; padding: 12px; background: #10141b; border: 1px solid var(--line-soft); border-radius: 12px; overflow: auto; white-space: pre-wrap; word-break: break-word; font-family: var(--font-mono); font-size: 12px; line-height: 1.55; max-height: 260px; color: #e1e8f3; }
     .layout { display: grid; grid-template-columns: 272px minmax(0, 1fr); min-height: 100vh; background: rgba(8, 10, 14, 0.28); }
     .main-shell { height: 100%; min-height: 0; display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; gap: 0; background: #111318; position: relative; }
     .chat-stack { min-height: 0; padding: 0 10px; display: grid; }
@@ -1824,10 +1828,24 @@ function renderThreadPanelHtml(nonce: string): string {
     .badge.bad { color: var(--bad); }
     .badge.warn { color: var(--warn); }
     .sidebar-summary { border: 1px solid var(--line-soft); border-radius: 14px; padding: 12px; background: #11151d; }
-    .composer-shell { display: grid; gap: 10px; }
-    .composer-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
-    .checkbox-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 0 12px 12px; }
-    .checkbox { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+    .composer-shell { display: grid; gap: 8px; }
+    .composer-input-shell { position: relative; }
+    .composer-input-shell textarea { min-height: 92px; border-radius: 10px; }
+    .composer-footer { display: flex; align-items: flex-end; gap: 10px; justify-content: space-between; }
+    .composer-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .composer-right { display: flex; align-items: center; gap: 8px; }
+    .composer-plus { width: 32px; height: 32px; border-radius: 8px; padding: 0; font-size: 18px; line-height: 1; }
+    .composer-menu { display: grid; gap: 6px; padding: 8px; border: 1px solid var(--line-soft); border-radius: 10px; background: #0f141b; }
+    .composer-menu-head { color: var(--muted); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; }
+    .context-toggles { display: flex; flex-wrap: wrap; gap: 6px; }
+    .context-toggle { border: 1px solid var(--line-soft); border-radius: 8px; background: #11161d; color: #c6d0df; padding: 7px 10px; font-size: 12px; }
+    .context-toggle.active { border-color: rgba(124, 184, 255, 0.34); color: #eef4fd; background: #162130; }
+    .composer-meta-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .control-group { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+    .control-label { color: var(--muted); font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; }
+    .composer-select, .composer-input { min-width: 0; height: 32px; border-radius: 8px; background: #0f141b; border: 1px solid var(--line-soft); color: #e7edf7; padding: 0 10px; font-size: 12px; }
+    .composer-select { min-width: 118px; }
+    .composer-input { width: 170px; }
     .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .summary-strip { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
     .summary-card, .mini-card { border: 1px solid var(--line-soft); border-radius: 10px; padding: 12px; background: #121720; min-width: 0; }
@@ -1847,26 +1865,39 @@ function renderThreadPanelHtml(nonce: string): string {
     .session-bar .session-title { font-size: 18px; font-weight: 700; line-height: 1.35; }
     .session-bar .session-summary { color: var(--muted); font-size: 13px; line-height: 1.6; max-width: 920px; }
     .session-meta { display: flex; flex-wrap: wrap; gap: 8px 12px; color: var(--muted); font-size: 12px; }
-    .chat-panel { min-height: 0; display: grid; gap: 8px; padding: 8px 0 6px; }
+    .chat-panel { min-height: 0; display: grid; gap: 8px; padding: 4px 0 2px; }
     .timeline-card { min-height: 0; }
-    .timeline { align-content: start; display: grid; gap: 10px; min-height: 0; height: 100%; max-height: none; overflow: auto; padding: 2px 0 12px; }
-    .message { display: grid; gap: 6px; border-bottom: 1px solid rgba(42, 47, 58, 0.7); padding: 0 0 12px; }
-    .message.user { margin-left: 0; border: 0; border-radius: 0; padding: 0 0 10px; background: transparent; }
-    .message.assistant { margin-right: 0; padding: 0 0 12px; }
-    .message.system { padding: 0 0 10px; }
-    .message-meta { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
-    .message-author { display: flex; gap: 8px; align-items: flex-start; }
-    .avatar { width: 24px; height: 24px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; background: #0f131b; border: 1px solid var(--line-soft); color: var(--accent-strong); font-size: 11px; font-weight: 700; flex: none; }
-    .message.user .avatar { color: #d7e9ff; border-color: rgba(105, 149, 206, 0.34); }
-    .message.assistant .avatar, .message.system .avatar { display: none; }
-    .message.assistant .message-author, .message.system .message-author { gap: 0; }
-    .message.assistant .message-label, .message.system .message-label { font-size: 11px; color: #a9b5c6; letter-spacing: 0.04em; text-transform: uppercase; }
-    .message.user .message-label { font-size: 12px; font-weight: 700; }
-    .message-sub { font-size: 11px; color: var(--muted); margin-top: 1px; }
-    .message-title { font-size: 16px; font-weight: 700; line-height: 1.38; color: #f2f5fb; }
-    .message-body { color: #e6ebf6; font-size: 14px; line-height: 1.72; }
-    .message-body code { font-family: var(--font-mono); }
-    .message-chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+    .timeline { align-content: start; display: grid; gap: 12px; min-height: 0; height: 100%; max-height: none; overflow: auto; padding: 2px 0 12px; }
+    .message { display: grid; gap: 6px; }
+    .message.user { justify-items: end; }
+    .message.assistant { justify-items: start; }
+    .message.system { justify-items: stretch; }
+    .message-meta { display: flex; justify-content: space-between; gap: 10px; align-items: center; min-height: 16px; }
+    .message-author, .message-label, .avatar { display: none; }
+    .message-sub { font-size: 11px; color: #788394; }
+    .message.user .message-meta { justify-content: flex-end; }
+    .message.user .message-sub { text-align: right; }
+    .message-chips { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+    .message-title { font-size: 13px; font-weight: 700; line-height: 1.45; color: #eef3fb; }
+    .message-body-shell { width: min(100%, 860px); }
+    .message.user .message-body-shell { width: min(78%, 720px); background: #10161d; border: 1px solid #283242; border-radius: 12px; padding: 11px 13px; }
+    .message.assistant .message-body-shell { width: min(100%, 860px); }
+    .message.system .message-body-shell { width: 100%; border-left: 2px solid rgba(124, 184, 255, 0.25); padding-left: 10px; }
+    .message-body { color: #e8edf5; font-size: 14px; line-height: 1.78; }
+    .message-body p { margin: 0 0 10px; }
+    .message-body p:last-child { margin-bottom: 0; }
+    .message-body ul, .message-body ol { margin: 0 0 10px 18px; padding: 0; }
+    .message-body li { margin: 0 0 5px; }
+    .message-body h1, .message-body h2, .message-body h3 { margin: 0 0 10px; line-height: 1.4; color: #f5f8fc; }
+    .message-body h1 { font-size: 20px; }
+    .message-body h2 { font-size: 17px; }
+    .message-body h3 { font-size: 15px; }
+    .message-body strong { color: #f8fbff; font-weight: 700; }
+    .message-body a { color: #9dcbff; text-decoration: none; border-bottom: 1px solid rgba(157, 203, 255, 0.25); }
+    .message-body a:hover { color: #c6e1ff; border-bottom-color: rgba(198, 225, 255, 0.55); }
+    .message-body code { font-family: var(--font-mono); font-size: 12px; color: #e8eef8; background: #11161d; border: 1px solid #253040; border-radius: 6px; padding: 1px 5px; }
+    .message-body pre { margin: 10px 0; padding: 11px 12px; overflow: auto; background: #0d1319; border: 1px solid #253040; border-radius: 8px; color: #dde7f5; }
+    .message-body pre code { padding: 0; border: 0; background: transparent; font-size: 12px; line-height: 1.65; color: inherit; }
     .utility-panel { display: grid; gap: 12px; }
     .utility-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
     .utility-tab { border: 1px solid var(--line-soft); border-radius: 999px; padding: 8px 12px; background: #11151c; color: var(--muted); font-size: 12px; }
@@ -1881,8 +1912,8 @@ function renderThreadPanelHtml(nonce: string): string {
     .drawer-subtitle { color: var(--muted); font-size: 12px; line-height: 1.45; }
     .drawer-close { border-radius: 8px; padding: 6px 10px; background: #11151c; border: 1px solid var(--line-soft); color: var(--muted); font-size: 12px; }
     .drawer-content { display: grid; gap: 12px; }
-    .change-card { border: 1px solid #2d3644; border-radius: 8px; background: #10161d; overflow: hidden; margin-top: 4px; }
-    .change-card-header { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--line-soft); background: #111820; }
+    .change-card { border: 1px solid #26313f; border-radius: 9px; background: #0f141b; overflow: hidden; margin-top: 2px; }
+    .change-card-header { display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 9px 11px; border-bottom: 1px solid var(--line-soft); background: #111820; }
     .change-card-title { font-size: 12px; font-weight: 700; color: #eef3fb; }
     .change-card-delta { display: flex; gap: 10px; font-size: 12px; font-weight: 700; }
     .delta-plus { color: #57c67f; }
@@ -1897,8 +1928,8 @@ function renderThreadPanelHtml(nonce: string): string {
     .change-preview-title { min-width: 0; font-size: 12px; font-weight: 600; color: #eef3fb; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .change-preview-body { padding: 12px; font-family: var(--font-mono); font-size: 12px; line-height: 1.55; color: #d8e2f1; white-space: pre-wrap; word-break: break-word; }
     .change-actions { display: flex; gap: 8px; flex-wrap: wrap; padding: 0 12px 10px; }
-    .composer-dock { border-top: 1px solid var(--line-soft); background: rgba(17, 19, 24, 0.98); backdrop-filter: blur(10px); padding: 8px 10px 10px; }
-    @media (max-width: 1180px) { .two-col, .checkbox-grid { grid-template-columns: 1fr; } .message.user, .message.assistant { margin-left: 0; margin-right: 0; } }
+    .composer-dock { border-top: 1px solid var(--line-soft); background: rgba(17, 19, 24, 0.98); backdrop-filter: blur(10px); padding: 8px 0 10px; }
+    @media (max-width: 1180px) { .two-col { grid-template-columns: 1fr; } .message.user .message-body-shell { width: min(100%, 760px); } }
     @media (max-width: 960px) { .layout { grid-template-columns: 1fr; } .sidebar { border-right: 0; border-bottom: 1px solid var(--line); } .main-shell { padding-left: 12px; padding-right: 12px; } .panel-drawer { width: calc(100vw - 20px); left: 10px; } .change-file-row { grid-template-columns: 1fr; } }
   </style>
 </head>
@@ -1934,6 +1965,10 @@ function renderThreadPanelHtml(nonce: string): string {
     let selectedRunProfileId = "";
     let threadFilter = "";
     let showThreadDrawer = false;
+    let showComposerMenu = false;
+    let modelPreset = "auto";
+    let customModel = "";
+    let reasoningLevel = "balanced";
     let timelineScrollState = { top: 0, distanceFromBottom: 0 };
     let contextOptions = {
       includeActiveFile: true,
@@ -1981,21 +2016,37 @@ function renderThreadPanelHtml(nonce: string): string {
         render();
         return;
       }
+      if (action === "toggle-composer-menu") {
+        showComposerMenu = !showComposerMenu;
+        render();
+        return;
+      }
       if (action === "close-drawers") {
         showThreadDrawer = false;
+        showComposerMenu = false;
         render();
         return;
       }
       if (action === "new-thread") {
         draftPrompt = "";
         showThreadDrawer = false;
+        showComposerMenu = false;
         post("new-thread");
         return;
       }
       if (action === "select-thread") {
         draftPrompt = "";
         showThreadDrawer = false;
+        showComposerMenu = false;
         post("select-thread", { threadId: target.dataset.threadId || "" });
+        return;
+      }
+      if (action === "toggle-context") {
+        const contextKey = target.dataset.contextKey || "";
+        if (contextKey) {
+          contextOptions[contextKey] = !contextOptions[contextKey];
+          render();
+        }
         return;
       }
       if (action === "submit-prompt") {
@@ -2004,7 +2055,13 @@ function renderThreadPanelHtml(nonce: string): string {
           return;
         }
         draftPrompt = "";
-        post("submit-prompt", { prompt: prompt, contextOptions: contextOptions });
+        showComposerMenu = false;
+        post("submit-prompt", {
+          prompt: prompt,
+          model: selectedModel(),
+          reasoningLevel: reasoningLevel,
+          contextOptions: contextOptions,
+        });
         return;
       }
       if (action === "apply-patch") {
@@ -2039,6 +2096,10 @@ function renderThreadPanelHtml(nonce: string): string {
         draftSyncTimer = setTimeout(function() {
           post("update-draft", { prompt: draftPrompt });
         }, 250);
+        return;
+      }
+      if (target && target.id === "custom-model-input") {
+        customModel = target.value;
       }
     });
 
@@ -2049,6 +2110,15 @@ function renderThreadPanelHtml(nonce: string): string {
       }
       if (target.id === "run-profile-select") {
         selectedRunProfileId = target.value;
+        return;
+      }
+      if (target.id === "model-preset") {
+        modelPreset = target.value || "auto";
+        render();
+        return;
+      }
+      if (target.id === "reasoning-level") {
+        reasoningLevel = target.value || "balanced";
         return;
       }
       if (target.dataset && target.dataset.contextKey) {
@@ -2217,19 +2287,36 @@ function renderThreadPanelHtml(nonce: string): string {
     }
 
     function renderComposer(promptValue) {
+      const selectedModelValue = selectedModel();
       return [
         '<div class="composer-shell">',
-        '<textarea id="prompt-input" placeholder="예: src/hello.py 파일에 간단한 스크립트를 추가해줘">' + esc(promptValue) + '</textarea>',
-        '<div class="composer-actions">',
-        '  <button class="primary" data-action="submit-prompt">전송</button>',
-        '  <span class="utility-hint">' + esc(state.composeMode ? '새 세션으로 전송됩니다.' : '현재 세션에 이어서 전송됩니다.') + '</span>',
+        '  <div class="composer-input-shell"><textarea id="prompt-input" placeholder="계획, @ 컨텍스트, / 명령">' + esc(promptValue) + '</textarea></div>',
+        '  <div class="composer-meta-row">',
+        '    <label class="control-group"><span class="control-label">모델</span><select id="model-preset" class="composer-select"><option value="auto"' + (modelPreset === 'auto' ? ' selected' : '') + '>Auto</option><option value="custom"' + (modelPreset === 'custom' ? ' selected' : '') + '>직접 입력</option></select></label>',
+        (modelPreset === 'custom'
+          ? '<label class="control-group"><span class="control-label">모델 ID</span><input id="custom-model-input" class="composer-input" placeholder="예: gpt-5.4" value="' + attr(customModel) + '" /></label>'
+          : '<label class="control-group"><span class="control-label">선택됨</span><input class="composer-input" value="' + attr(selectedModelValue) + '" readonly /></label>'),
+        '    <label class="control-group"><span class="control-label">이성 수준</span><select id="reasoning-level" class="composer-select"><option value="low"' + (reasoningLevel === 'low' ? ' selected' : '') + '>빠르게</option><option value="balanced"' + (reasoningLevel === 'balanced' ? ' selected' : '') + '>균형</option><option value="high"' + (reasoningLevel === 'high' ? ' selected' : '') + '>깊게</option></select></label>',
         '</div>',
-        '<details><summary>고급 옵션</summary><div class="checkbox-grid">',
-        renderCheckbox('includeActiveFile', '현재 파일', contextOptions.includeActiveFile),
-        renderCheckbox('includeSelection', '선택 영역', contextOptions.includeSelection),
-        renderCheckbox('includeLatestError', '최근 오류', contextOptions.includeLatestError),
-        renderCheckbox('includeWorkspaceSummary', '작업공간 요약', contextOptions.includeWorkspaceSummary),
-        '</div></details>',
+        '  <div class="composer-footer">',
+        '    <div class="composer-left"><button class="ghost composer-plus" data-action="toggle-composer-menu" aria-label="추가 메뉴">+</button><span class="utility-hint">' + esc(state.composeMode ? '새 세션으로 전송됩니다.' : '현재 세션에 이어서 전송됩니다.') + '</span></div>',
+        '    <div class="composer-right"><button class="primary" data-action="submit-prompt">보내기</button></div>',
+        '  </div>',
+        (showComposerMenu ? renderComposerMenu() : ''),
+        '</div>',
+      ].join('');
+    }
+
+    function renderComposerMenu() {
+      return [
+        '<div class="composer-menu">',
+        '  <div class="composer-menu-head">추가 컨텍스트</div>',
+        '  <div class="context-toggles">',
+        renderContextToggle('includeActiveFile', '현재 파일', contextOptions.includeActiveFile),
+        renderContextToggle('includeSelection', '선택 영역', contextOptions.includeSelection),
+        renderContextToggle('includeLatestError', '최근 오류', contextOptions.includeLatestError),
+        renderContextToggle('includeWorkspaceSummary', '작업공간 요약', contextOptions.includeWorkspaceSummary),
+        '  </div>',
         '</div>',
       ].join('');
     }
@@ -2345,10 +2432,10 @@ function renderThreadPanelHtml(nonce: string): string {
         const content = eventBody(item, headline);
         const attachment = renderEventAttachment(item);
         const chips = [];
-        if (item.data && item.data.status) {
+        if (item.data && item.data.status && badgeTone(item.data.status) === 'bad') {
           chips.push('<span class="badge ' + badgeTone(item.data.status) + '">' + esc(String(item.data.status)) + '</span>');
         }
-        return '<article class="message ' + role + '"><div class="message-meta"><div class="message-author"><span class="avatar">' + esc(roleGlyph(role)) + '</span><div><div class="message-label">' + esc(roleLabel(role)) + '</div><div class="message-sub">' + esc(fmt(item.at, true)) + '</div></div></div><div class="message-chips">' + chips.join('') + '</div></div>' + (headline ? '<div class="message-title">' + esc(headline) + '</div>' : '') + (content ? '<div class="message-body">' + nl2br(content) + '</div>' : '') + attachment + '</article>';
+        return '<article class="message ' + role + '"><div class="message-meta"><div class="message-sub">' + esc(fmt(item.at, true)) + '</div><div class="message-chips">' + chips.join('') + '</div></div>' + (headline ? '<div class="message-title">' + esc(headline) + '</div>' : '') + renderMessageBody(role, content) + attachment + '</article>';
       }).join('') + '</div>';
     }
 
@@ -2387,6 +2474,10 @@ function renderThreadPanelHtml(nonce: string): string {
 
     function shouldShowPrimaryEvent(item) {
       const kind = String(item.kind || '').toLowerCase();
+      const status = String((item.data && item.data.status) || '').toLowerCase();
+      if (kind === 'patch_applied' || kind === 'patch_result' || kind === 'run_finished' || kind === 'run_result') {
+        return status === 'failed' || status === 'conflict' || status === 'partial';
+      }
       return ![
         'prompt_accepted',
         'tool_activity',
@@ -2409,13 +2500,13 @@ function renderThreadPanelHtml(nonce: string): string {
         return '';
       }
       if (kind === 'patch_ready') {
-        return '변경 제안';
+        return '';
       }
       if (kind === 'patch_applied' || kind === 'patch_result') {
-        return '패치 적용 결과';
+        return '변경 반영 실패';
       }
       if (kind === 'run_finished' || kind === 'run_result') {
-        return '실행 결과';
+        return '실행 실패';
       }
       if (kind === 'error') {
         return '오류';
@@ -2432,10 +2523,10 @@ function renderThreadPanelHtml(nonce: string): string {
         return summary || item.body || '';
       }
       if (kind === 'patch_applied' || kind === 'patch_result') {
-        return item.body || message || '';
+        return message || item.body || '';
       }
       if (kind === 'run_finished' || kind === 'run_result') {
-        return summary || item.body || excerpt || '';
+        return summary || excerpt || item.body || '';
       }
       const raw = item.body || '';
       if (raw && raw !== headline) {
@@ -2449,12 +2540,6 @@ function renderThreadPanelHtml(nonce: string): string {
       if (kind === 'patch_ready') {
         const files = extractPatchFiles(item);
         return files.length ? renderChangeCard(files) : '';
-      }
-      if (kind === 'patch_applied' || kind === 'patch_result') {
-        return renderPatchResultCard(item);
-      }
-      if (kind === 'run_finished' || kind === 'run_result') {
-        return renderRunResultCard(item);
       }
       return '';
     }
@@ -2474,44 +2559,6 @@ function renderThreadPanelHtml(nonce: string): string {
         }).join('') + '</div>',
         preview,
         '  <div class="change-actions"><button class="secondary" data-action="apply-patch"' + (state.currentJobId && files.length ? '' : ' disabled') + '>변경 반영</button>' + renderRunAction() + '</div>',
-        '</section>',
-      ].join('');
-    }
-
-    function renderPatchResultCard(item) {
-      const status = String((item.data && item.data.status) || state.derived.patchResultStatus || '-');
-      const message = String((item.data && item.data.message) || state.derived.patchResultMessage || item.body || '');
-      return [
-        '<section class="change-card">',
-        '  <div class="change-card-header">',
-        '    <div class="change-card-title">변경 반영 결과</div>',
-        '    <div class="change-card-delta"><span class="' + (status.toLowerCase() === 'failed' ? 'delta-minus' : 'delta-plus') + '">' + esc(status) + '</span></div>',
-        '  </div>',
-        '  <div class="change-file-list"><div class="change-file-row"><div class="change-file-name">' + esc(message || '결과 메시지가 없습니다.') + '</div></div></div>',
-        '  <div class="change-actions">' + renderRunAction() + '</div>',
-        '</section>',
-      ].join('');
-    }
-
-    function renderRunResultCard(item) {
-      const changedFiles = normalizeStringList((item.data && item.data.changedFiles) || state.derived.currentJobFiles);
-      const status = String((item.data && item.data.status) || state.derived.runStatus || '-');
-      const summary = String((item.data && item.data.summary) || state.derived.runSummary || item.body || '');
-      const rows = [];
-      if (changedFiles.length) {
-        rows.push.apply(rows, changedFiles.map(function(path) {
-          return '<div class="change-file-row"><div class="change-file-name">' + esc(path) + '</div><div class="change-file-stats"><span class="delta-plus">changed</span></div></div>';
-        }));
-      } else if (summary) {
-        rows.push('<div class="change-file-row"><div class="change-file-name">' + esc(summary) + '</div></div>');
-      }
-      return [
-        '<section class="change-card">',
-        '  <div class="change-card-header">',
-        '    <div class="change-card-title">실행 결과</div>',
-        '    <div class="change-card-delta"><span class="' + (status.toLowerCase() === 'failed' ? 'delta-minus' : 'delta-plus') + '">' + esc(status) + '</span></div>',
-        '  </div>',
-        '  <div class="change-file-list">' + rows.join('') + '</div>',
         '</section>',
       ].join('');
     }
@@ -2607,24 +2654,14 @@ function renderThreadPanelHtml(nonce: string): string {
       return 'system';
     }
 
-    function roleLabel(role) {
-      if (role === 'assistant') {
-        return '에이전트';
+    function renderMessageBody(role, content) {
+      if (!content) {
+        return '';
       }
       if (role === 'user') {
-        return '사용자';
+        return '<div class="message-body-shell"><div class="message-body"><p>' + esc(content).replace(/\\n/g, '<br />') + '</p></div></div>';
       }
-      return '시스템';
-    }
-
-    function roleGlyph(role) {
-      if (role === 'assistant') {
-        return 'AI';
-      }
-      if (role === 'user') {
-        return 'ME';
-      }
-      return 'SYS';
+      return '<div class="message-body-shell"><div class="message-body">' + renderMarkdown(content) + '</div></div>';
     }
 
     function describeKind(kind) {
@@ -2654,12 +2691,8 @@ function renderThreadPanelHtml(nonce: string): string {
       return String(kind || '-').replace(/[_-]+/g, ' ');
     }
 
-    function nl2br(value) {
-      return esc(value).replace(/\\n/g, '<br />');
-    }
-
-    function renderCheckbox(key, label, checked) {
-      return '<label class="checkbox"><input type="checkbox" data-context-key="' + attr(key) + '"' + (checked ? ' checked' : '') + ' /> ' + esc(label) + '</label>';
+    function renderContextToggle(key, label, active) {
+      return '<button class="context-toggle' + (active ? ' active' : '') + '" data-action="toggle-context" data-context-key="' + attr(key) + '">' + esc(label) + '</button>';
     }
 
     function badgeTone(value) {
@@ -2696,6 +2729,133 @@ function renderThreadPanelHtml(nonce: string): string {
 
     function attr(value) {
       return esc(value);
+    }
+
+    function selectedModel() {
+      if (modelPreset === 'custom') {
+        return customModel.trim();
+      }
+      return modelPreset.trim();
+    }
+
+    function renderMarkdown(value) {
+      const source = String(value || '').replace(/\\r\\n/g, '\\n').trim();
+      if (!source) {
+        return '';
+      }
+      const lines = source.split('\\n');
+      const parts = [];
+      let paragraph = [];
+      let listType = '';
+      let listItems = [];
+      let codeFence = '';
+      let codeLines = [];
+
+      function flushParagraph() {
+        if (!paragraph.length) {
+          return;
+        }
+        parts.push('<p>' + renderInline(paragraph.join('<br />')) + '</p>');
+        paragraph = [];
+      }
+
+      function flushList() {
+        if (!listItems.length || !listType) {
+          listItems = [];
+          listType = '';
+          return;
+        }
+        parts.push('<' + listType + '>' + listItems.map(function(item) {
+          return '<li>' + renderInline(item) + '</li>';
+        }).join('') + '</' + listType + '>');
+        listItems = [];
+        listType = '';
+      }
+
+      function flushCodeBlock() {
+        if (!codeFence) {
+          return;
+        }
+        parts.push('<pre><code>' + esc(codeLines.join('\\n')) + '</code></pre>');
+        codeFence = '';
+        codeLines = [];
+      }
+
+      for (const rawLine of lines) {
+        const line = String(rawLine || '');
+        if (line.trim().startsWith(String.fromCharCode(96, 96, 96))) {
+          if (codeFence) {
+            flushCodeBlock();
+          } else {
+            flushParagraph();
+            flushList();
+            codeFence = line.trim().slice(3).trim() || 'plain';
+          }
+          continue;
+        }
+        if (codeFence) {
+          codeLines.push(line);
+          continue;
+        }
+        const heading = line.match(/^(#{1,3})\\s+(.+)$/);
+        if (heading) {
+          flushParagraph();
+          flushList();
+          const level = Math.min(3, heading[1].length);
+          parts.push('<h' + level + '>' + renderInline(heading[2]) + '</h' + level + '>');
+          continue;
+        }
+        const unordered = line.match(/^\\s*[-*]\\s+(.+)$/);
+        if (unordered) {
+          flushParagraph();
+          if (listType && listType !== 'ul') {
+            flushList();
+          }
+          listType = 'ul';
+          listItems.push(unordered[1]);
+          continue;
+        }
+        const ordered = line.match(/^\\s*\\d+\\.\\s+(.+)$/);
+        if (ordered) {
+          flushParagraph();
+          if (listType && listType !== 'ol') {
+            flushList();
+          }
+          listType = 'ol';
+          listItems.push(ordered[1]);
+          continue;
+        }
+        if (!line.trim()) {
+          flushParagraph();
+          flushList();
+          continue;
+        }
+        paragraph.push(line);
+      }
+
+      flushParagraph();
+      flushList();
+      flushCodeBlock();
+      return parts.join('');
+    }
+
+    function renderInline(value) {
+      const tokens = [];
+      const backtick = String.fromCharCode(96);
+      const inlineCodePattern = new RegExp(backtick + '([^' + backtick + ']+)' + backtick, 'g');
+      const tokenized = String(value || '').replace(inlineCodePattern, function(_, code) {
+        const index = tokens.push('<code>' + esc(code) + '</code>') - 1;
+        return '\\u0000' + index + '\\u0000';
+      });
+      let output = esc(tokenized);
+      output = output.replace(/\\*\\*([^*]+)\\*\\*/g, '<strong>$1</strong>');
+      output = output.replace(/\\[([^\\]]+)\\]\\(([^)]+)\\)/g, function(_, label, href) {
+        return '<a href="' + attr(href) + '">' + esc(label) + '</a>';
+      });
+      output = output.replace(/\\u0000(\\d+)\\u0000/g, function(_, index) {
+        return tokens[Number.parseInt(index, 10)] || '';
+      });
+      return output;
     }
     } catch (error) {
       renderFatalError(error);

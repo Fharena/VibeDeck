@@ -387,7 +387,7 @@ func (a *CursorAgentCLIAdapter) generateTask(ctx context.Context, taskID string,
 	}
 
 	prompt := buildCursorAgentPrompt(input)
-	cursorOutput, err := a.runCursorAgent(ctx, worktreeDir, prompt)
+	cursorOutput, err := a.runCursorAgent(ctx, worktreeDir, prompt, input.Model)
 	if err != nil {
 		return nil, err
 	}
@@ -564,11 +564,11 @@ func (a *CursorAgentCLIAdapter) commitWorktreeBaseline(ctx context.Context, work
 	return nil
 }
 
-func (a *CursorAgentCLIAdapter) runCursorAgent(ctx context.Context, worktreeDir, prompt string) (string, error) {
+func (a *CursorAgentCLIAdapter) runCursorAgent(ctx context.Context, worktreeDir, prompt, modelOverride string) (string, error) {
 	promptCtx, cancel := withOptionalTimeout(ctx, a.cfg.PromptTimeout)
 	defer cancel()
 
-	args := append([]string{}, a.cfg.CursorAgentArgs...)
+	args := withCursorAgentModelArg(a.cfg.CursorAgentArgs, modelOverride)
 	args = append(args, prompt)
 	stdout, stderr, err := runCommand(promptCtx, worktreeDir, a.cfg.CursorAgentEnv, nil, a.cfg.CursorAgentBin, args...)
 	if err != nil {
@@ -706,6 +706,18 @@ func buildCursorAgentPrompt(input SubmitTaskInput) string {
 		builder.WriteString(input.Template)
 		builder.WriteString("\n")
 	}
+	if input.Model != "" {
+		builder.WriteString("Requested model: ")
+		builder.WriteString(input.Model)
+		builder.WriteString("\n")
+	}
+	if input.ReasoningLevel != "" {
+		builder.WriteString("Reasoning level: ")
+		builder.WriteString(input.ReasoningLevel)
+		builder.WriteString("\n")
+		builder.WriteString(reasoningInstruction(input.ReasoningLevel))
+		builder.WriteString("\n")
+	}
 	builder.WriteString("User request:\n")
 	builder.WriteString(strings.TrimSpace(input.Prompt))
 	builder.WriteString("\n")
@@ -734,6 +746,17 @@ func buildCursorAgentPrompt(input SubmitTaskInput) string {
 		}
 	}
 	return builder.String()
+}
+
+func reasoningInstruction(level string) string {
+	switch strings.ToLower(strings.TrimSpace(level)) {
+	case "low":
+		return "Prefer a quick direct solution. Keep exploration and explanation short."
+	case "high":
+		return "Spend more time planning, verifying, and reviewing before editing files."
+	default:
+		return "Use a balanced amount of planning before editing files."
+	}
 }
 
 func parseUnifiedPatch(raw string) (unifiedPatch, error) {
@@ -1217,17 +1240,24 @@ func ensureCursorAgentModelArg(args []string, model string) []string {
 	if model == "" {
 		return append([]string{}, args...)
 	}
-	for index, arg := range args {
-		if arg == "--model" && index+1 < len(args) {
-			return append([]string{}, args...)
+	out := make([]string, 0, len(args)+2)
+	for index := 0; index < len(args); index++ {
+		arg := args[index]
+		if arg == "--model" {
+			index++
+			continue
 		}
 		if strings.HasPrefix(arg, "--model=") {
-			return append([]string{}, args...)
+			continue
 		}
+		out = append(out, arg)
 	}
-	out := append([]string{}, args...)
 	out = append(out, "--model", model)
 	return out
+}
+
+func withCursorAgentModelArg(args []string, model string) []string {
+	return ensureCursorAgentModelArg(args, model)
 }
 
 func defaultWSLExecutable(current string) string {

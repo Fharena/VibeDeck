@@ -103,6 +103,8 @@ func (o *Orchestrator) handlePromptSubmit(ctx context.Context, env protocol.Enve
 		Body:  payload.Prompt,
 		Data: map[string]any{
 			"template":       payload.Template,
+			"model":          payload.Model,
+			"reasoningLevel": payload.ReasoningLevel,
 			"activeFilePath": contextData.ActiveFilePath,
 			"selection":      contextData.Selection,
 			"changedFiles":   contextData.ChangedFiles,
@@ -110,9 +112,11 @@ func (o *Orchestrator) handlePromptSubmit(ctx context.Context, env protocol.Enve
 	})
 
 	taskHandle, err := o.adapter.SubmitTask(ctx, SubmitTaskInput{
-		Prompt:   payload.Prompt,
-		Template: payload.Template,
-		Context:  contextData,
+		Prompt:         payload.Prompt,
+		Template:       payload.Template,
+		Model:          payload.Model,
+		ReasoningLevel: payload.ReasoningLevel,
+		Context:        contextData,
 	})
 	if err != nil {
 		return o.ackFail(env, "adapter submit task failed", err)
