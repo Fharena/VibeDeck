@@ -311,7 +311,7 @@ const fakeVscode = {
       if (command === "vibedeckBridge.sharedThreads.focus") {
         return undefined;
       }
-      if (command === "workbench.action.moveFocusedView") {
+      if (command === "views.moveViewRight") {
         return undefined;
       }
       if (command === "workbench.action.focusAuxiliaryBar") {
@@ -426,9 +426,9 @@ try {
   const activeHost = fakePanel.webview.html ? fakePanel.webview : fakeView.webview;
   assert.match(activeHost.html, /세션/);
   assert.match(activeHost.html, /새 세션/);
-  assert.match(activeHost.html, /메시지/);
+  assert.match(activeHost.html, /세션 목록/);
   assert.match(activeHost.html, /변경 반영/);
-  assert.match(activeHost.html, /도구처럼 쓰기|오른쪽 고정/);
+  assert.match(activeHost.html, /icon-button/);
   assert.equal(activeHost.options.enableScripts, true);
   const embeddedScript = activeHost.html.match(/<script nonce="[^"]*">([\s\S]*)<\/script>/)?.[1] ?? "";
   assert.ok(embeddedScript, "thread panel html should include inline webview script");
@@ -467,8 +467,8 @@ try {
 
   await fakeVscode.commands.executeCommand("vibedeckBridge.moveThreadPanelToAuxiliaryBar");
   assert.ok(
-    builtinCommands.includes("workbench.action.moveFocusedView"),
-    "right-dock command should trigger moveFocusedView",
+    builtinCommands.includes("views.moveViewRight"),
+    "right-dock command should trigger views.moveViewRight",
   );
 
   await panelMessageHandler({ type: "apply-patch" });
