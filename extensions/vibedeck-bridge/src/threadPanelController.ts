@@ -85,6 +85,7 @@ export interface ThreadPanelController {
   openOrReveal(): Promise<void>;
   openInEditor(): Promise<void>;
   openInSidebar(): Promise<void>;
+  moveToAuxiliaryBar(): Promise<void>;
   refreshIfOpen(): Promise<void>;
   dispose(): void;
 }
@@ -201,6 +202,10 @@ class DefaultThreadPanelController implements ThreadPanelController {
   }
 
   async openOrReveal(): Promise<void> {
+    if (!this.preferPanelHost && this.viewRegistration) {
+      await this.openInSidebar();
+      return;
+    }
     if (this.preferPanelHost && this.panel) {
       this.panel.reveal(this.vscode.viewColumn.beside ?? this.vscode.viewColumn.one);
       await this.refresh();
@@ -239,6 +244,47 @@ class DefaultThreadPanelController implements ThreadPanelController {
       return;
     }
     await this.openInEditor();
+  }
+
+  async moveToAuxiliaryBar(): Promise<void> {
+    const executeCommand = this.vscode.commands?.executeCommand;
+    if (typeof executeCommand !== "function") {
+      this.vscode.window.showWarningMessage(
+        "이 환경에서는 공유 세션을 오른쪽 보조 사이드바로 옮길 수 없습니다.",
+      );
+      return;
+    }
+
+    await this.openInSidebar();
+    this.vscode.window.showInformationMessage(
+      "빠른 선택에서 '새 보조 사이드바 항목'을 선택하면 이후엔 오른쪽 도구 영역처럼 열립니다.",
+    );
+
+    try {
+      await executeCommand(
+        "workbench.action.moveFocusedView",
+        DefaultThreadPanelController.sidebarViewId,
+      );
+    } catch (error) {
+      this.lastErrorMessage = describeError(error);
+      this.lastStatusMessage = "";
+      this.vscode.window.showWarningMessage(
+        "공유 세션 위치를 바꾸지 못했습니다: " + this.lastErrorMessage,
+      );
+      await this.refreshIfOpen();
+      return;
+    }
+
+    try {
+      await executeCommand("workbench.action.focusAuxiliaryBar");
+    } catch {
+      // 보조 사이드바 focus command가 없는 환경에서는 조용히 넘어간다.
+    }
+    try {
+      await executeCommand(`${DefaultThreadPanelController.sidebarViewId}.focus`);
+    } catch {
+      // 이동 후 자동 focus command가 없는 환경에서는 조용히 넘어간다.
+    }
   }
 
   async refreshIfOpen(): Promise<void> {
@@ -333,6 +379,14 @@ class DefaultThreadPanelController implements ThreadPanelController {
     const executeCommand = this.vscode.commands?.executeCommand;
     if (typeof executeCommand !== "function") {
       return;
+    }
+    try {
+      await executeCommand(`${DefaultThreadPanelController.sidebarViewId}.focus`);
+      if (this.view) {
+        return;
+      }
+    } catch {
+      // view가 아직 생성되지 않았으면 컨테이너 reveal로 한 번 더 시도한다.
     }
     try {
       await executeCommand(
@@ -468,6 +522,9 @@ class DefaultThreadPanelController implements ThreadPanelController {
           return;
         case "open-in-sidebar":
           await this.openInSidebar();
+          return;
+        case "move-to-auxiliary":
+          await this.moveToAuxiliaryBar();
           return;
         case "new-thread": {
           const previousSessionId = this.currentSessionID();
@@ -1904,6 +1961,10 @@ function renderThreadPanelHtml(nonce: string): string {
         post("open-in-sidebar");
         return;
       }
+      if (action === "move-to-auxiliary") {
+        post("move-to-auxiliary");
+        return;
+      }
       if (action === "toggle-thread-drawer") {
         showThreadDrawer = !showThreadDrawer;
         render();
@@ -2035,13 +2096,12 @@ function renderThreadPanelHtml(nonce: string): string {
     function renderTopBar() {
       const title = state.composeMode ? '새 세션' : ((state.currentThread && state.currentThread.title) || '세션을 선택하세요');
       const summary = state.live.activity.summary || ((state.currentThread && state.currentThread.lastEventText) || '채팅을 시작하면 결과가 여기에 이어집니다.');
-      const detachLabel = state.hostMode === 'editor' ? '사이드바로' : '탭으로 열기';
-      const detachAction = state.hostMode === 'editor' ? 'open-in-sidebar' : 'open-in-editor';
+      const dockLabel = state.hostMode === 'editor' ? '도구처럼 쓰기' : '오른쪽 고정';
       return [
         '<div class="topbar">',
         '  <div class="topbar-actions"><button class="toolbar-button ' + (showThreadDrawer ? 'active' : '') + '" data-action="toggle-thread-drawer">세션</button></div>',
         '  <div class="topbar-main"><div class="topbar-title">' + esc(title) + '</div><div class="topbar-subtitle">' + esc(summary) + '</div></div>',
-        '  <div class="topbar-actions"><button class="toolbar-button" data-action="' + detachAction + '">' + detachLabel + '</button><button class="toolbar-button" data-action="new-thread">새 세션</button></div>',
+        '  <div class="topbar-actions"><button class="toolbar-button" data-action="move-to-auxiliary">' + dockLabel + '</button><button class="toolbar-button" data-action="new-thread">새 세션</button></div>',
         '</div>',
       ].join('');
     }

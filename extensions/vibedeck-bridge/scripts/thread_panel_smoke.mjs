@@ -250,6 +250,7 @@ const agentBaseUrl = `http://127.0.0.1:${address.port}`;
 
 const messages = { info: [], warn: [], error: [] };
 const commandRegistry = new Map();
+const builtinCommands = [];
 const panelMessages = [];
 const activeEditorListeners = [];
 const selectionListeners = [];
@@ -299,6 +300,7 @@ const fakeView = {
 const fakeVscode = {
   commands: {
     async executeCommand(command, ...args) {
+      builtinCommands.push(command);
       if (command === "workbench.view.extension.vibedeckBridge") {
         const provider = viewProviders.get("vibedeckBridge.sharedThreads");
         if (provider) {
@@ -307,6 +309,12 @@ const fakeVscode = {
         return undefined;
       }
       if (command === "vibedeckBridge.sharedThreads.focus") {
+        return undefined;
+      }
+      if (command === "workbench.action.moveFocusedView") {
+        return undefined;
+      }
+      if (command === "workbench.action.focusAuxiliaryBar") {
         return undefined;
       }
       return await commandRegistry.get(command)(...args);
@@ -420,7 +428,7 @@ try {
   assert.match(activeHost.html, /새 세션/);
   assert.match(activeHost.html, /메시지/);
   assert.match(activeHost.html, /변경 반영/);
-  assert.match(activeHost.html, /탭으로 열기|사이드바로/);
+  assert.match(activeHost.html, /도구처럼 쓰기|오른쪽 고정/);
   assert.equal(activeHost.options.enableScripts, true);
   const embeddedScript = activeHost.html.match(/<script nonce="[^"]*">([\s\S]*)<\/script>/)?.[1] ?? "";
   assert.ok(embeddedScript, "thread panel html should include inline webview script");
@@ -456,6 +464,12 @@ try {
 
   await panelMessageHandler({ type: "update-draft", prompt: "shared smoke draft" });
   await waitFor(() => (panelMessages.at(-1)?.state?.live?.composer?.draftText || "") === "shared smoke draft");
+
+  await fakeVscode.commands.executeCommand("vibedeckBridge.moveThreadPanelToAuxiliaryBar");
+  assert.ok(
+    builtinCommands.includes("workbench.action.moveFocusedView"),
+    "right-dock command should trigger moveFocusedView",
+  );
 
   await panelMessageHandler({ type: "apply-patch" });
   await waitFor(() => (panelMessages.at(-1)?.state?.derived?.patchResultStatus || "") === "failed");
