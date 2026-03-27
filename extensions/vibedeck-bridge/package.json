@@ -65,11 +65,6 @@
           "command": "vibedeckBridge.moveThreadPanelToAuxiliaryBar",
           "when": "view == vibedeckBridge.sharedThreads",
           "group": "navigation@1"
-        },
-        {
-          "command": "vibedeckBridge.openThreadPanelInEditor",
-          "when": "view == vibedeckBridge.sharedThreads",
-          "group": "navigation@2"
         }
       ]
     },
@@ -136,7 +131,11 @@
       },
       {
         "command": "vibedeckBridge.moveThreadPanelToAuxiliaryBar",
-        "title": "VibeDeck: 공유 세션을 오른쪽 보조 사이드바로 배치"
+        "title": "VibeDeck: 오른쪽 패널 토글",
+        "icon": {
+          "dark": "media/vibedeck-dock.svg",
+          "light": "media/vibedeck-dock.svg"
+        }
       },
       {
         "command": "vibedeckBridge.openMobileBootstrap",

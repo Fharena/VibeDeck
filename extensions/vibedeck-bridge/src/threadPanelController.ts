@@ -190,6 +190,7 @@ class DefaultThreadPanelController implements ThreadPanelController {
   private composeMode = false;
   private viewReady = false;
   private preferPanelHost = false;
+  private attemptedAutoRightDock = false;
   private lastState: ThreadPanelViewState | undefined;
   private lastStatusMessage = "";
   private lastErrorMessage = "";
@@ -202,13 +203,8 @@ class DefaultThreadPanelController implements ThreadPanelController {
   }
 
   async openOrReveal(): Promise<void> {
-    if (!this.preferPanelHost && this.viewRegistration) {
+    if (this.viewRegistration) {
       await this.openInSidebar();
-      return;
-    }
-    if (this.preferPanelHost && this.panel) {
-      this.panel.reveal(this.vscode.viewColumn.beside ?? this.vscode.viewColumn.one);
-      await this.refresh();
       return;
     }
     if (this.panel) {
@@ -216,7 +212,6 @@ class DefaultThreadPanelController implements ThreadPanelController {
       await this.refresh();
       return;
     }
-
     await this.openInEditor();
   }
 
@@ -240,6 +235,10 @@ class DefaultThreadPanelController implements ThreadPanelController {
       if (this.view?.show) {
         this.view.show(true);
       }
+      if (!this.attemptedAutoRightDock) {
+        this.attemptedAutoRightDock = true;
+        await this.dockViewToRight(false);
+      }
       await this.refreshIfOpen();
       return;
     }
@@ -247,44 +246,8 @@ class DefaultThreadPanelController implements ThreadPanelController {
   }
 
   async moveToAuxiliaryBar(): Promise<void> {
-    const executeCommand = this.vscode.commands?.executeCommand;
-    if (typeof executeCommand !== "function") {
-      this.vscode.window.showWarningMessage(
-        "이 환경에서는 공유 세션을 오른쪽 보조 사이드바로 옮길 수 없습니다.",
-      );
-      return;
-    }
-
     await this.openInSidebar();
-    this.vscode.window.showInformationMessage(
-      "빠른 선택에서 '새 보조 사이드바 항목'을 선택하면 이후엔 오른쪽 도구 영역처럼 열립니다.",
-    );
-
-    try {
-      await executeCommand(
-        "workbench.action.moveFocusedView",
-        DefaultThreadPanelController.sidebarViewId,
-      );
-    } catch (error) {
-      this.lastErrorMessage = describeError(error);
-      this.lastStatusMessage = "";
-      this.vscode.window.showWarningMessage(
-        "공유 세션 위치를 바꾸지 못했습니다: " + this.lastErrorMessage,
-      );
-      await this.refreshIfOpen();
-      return;
-    }
-
-    try {
-      await executeCommand("workbench.action.focusAuxiliaryBar");
-    } catch {
-      // 보조 사이드바 focus command가 없는 환경에서는 조용히 넘어간다.
-    }
-    try {
-      await executeCommand(`${DefaultThreadPanelController.sidebarViewId}.focus`);
-    } catch {
-      // 이동 후 자동 focus command가 없는 환경에서는 조용히 넘어간다.
-    }
+    await this.dockViewToRight(true);
   }
 
   async refreshIfOpen(): Promise<void> {
@@ -399,6 +362,49 @@ class DefaultThreadPanelController implements ThreadPanelController {
       await executeCommand(`${DefaultThreadPanelController.sidebarViewId}.focus`);
     } catch {
       // 자동 focus command가 없는 환경에서는 컨테이너 reveal만으로 충분하다.
+    }
+  }
+
+  private async dockViewToRight(showWarnings: boolean): Promise<void> {
+    const executeCommand = this.vscode.commands?.executeCommand;
+    if (typeof executeCommand !== "function") {
+      if (showWarnings) {
+        this.vscode.window.showWarningMessage(
+          "이 환경에서는 공유 세션을 오른쪽 패널처럼 배치할 수 없습니다.",
+        );
+      }
+      return;
+    }
+
+    try {
+      await executeCommand(`${DefaultThreadPanelController.sidebarViewId}.focus`);
+    } catch {
+      // focus 명령이 없어도 다음 이동 명령을 시도한다.
+    }
+
+    try {
+      await executeCommand("views.moveViewRight");
+    } catch (error) {
+      this.lastErrorMessage = describeError(error);
+      this.lastStatusMessage = "";
+      if (showWarnings) {
+        this.vscode.window.showWarningMessage(
+          "공유 세션을 오른쪽 패널처럼 배치하지 못했습니다: " + this.lastErrorMessage,
+        );
+      }
+      await this.refreshIfOpen();
+      return;
+    }
+
+    try {
+      await executeCommand("workbench.action.focusAuxiliaryBar");
+    } catch {
+      // 보조 사이드바 focus command가 없는 환경에서는 조용히 넘어간다.
+    }
+    try {
+      await executeCommand(`${DefaultThreadPanelController.sidebarViewId}.focus`);
+    } catch {
+      // 이동 뒤 view focus가 없어도 조용히 넘어간다.
     }
   }
 
@@ -1756,8 +1762,8 @@ function renderThreadPanelHtml(nonce: string): string {
     html, body, #app { height: 100%; }
     body { margin: 0; overflow: hidden; background: #111318; color: var(--text); font-family: var(--font-sans); }
     button, textarea, select, input { font: inherit; }
-    button, select, textarea, input { border: 1px solid var(--line); border-radius: 10px; background: var(--panel-soft); color: var(--text); }
-    button { padding: 9px 12px; cursor: pointer; transition: background 120ms ease, border-color 120ms ease, transform 120ms ease; }
+    button, select, textarea, input { border: 1px solid var(--line); border-radius: 6px; background: var(--panel-soft); color: var(--text); }
+    button { padding: 8px 11px; cursor: pointer; transition: background 120ms ease, border-color 120ms ease, transform 120ms ease; }
     button:hover { border-color: #394153; background: #1c212c; }
     button.primary { background: linear-gradient(180deg, #2b4f7c 0%, #23456f 100%); color: #f7fbff; border-color: #426998; font-weight: 700; }
     button.secondary { background: #1d212a; }
@@ -1771,15 +1777,20 @@ function renderThreadPanelHtml(nonce: string): string {
     pre { margin: 0; padding: 12px; background: #10141b; border: 1px solid var(--line-soft); border-radius: 12px; overflow: auto; white-space: pre-wrap; word-break: break-word; font-family: var(--font-mono); font-size: 12px; line-height: 1.55; max-height: 260px; }
     .layout { display: grid; grid-template-columns: 272px minmax(0, 1fr); min-height: 100vh; background: rgba(8, 10, 14, 0.28); }
     .main-shell { height: 100%; min-height: 0; display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; gap: 0; background: #111318; position: relative; }
-    .chat-stack { min-height: 0; padding: 0 18px; display: grid; }
-    .topbar-shell { position: sticky; top: 0; z-index: 3; padding: 10px 18px 8px; border-bottom: 1px solid var(--line-soft); background: rgba(17, 19, 24, 0.98); backdrop-filter: blur(10px); }
-    .topbar { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; }
+    .chat-stack { min-height: 0; padding: 0 10px; display: grid; }
+    .topbar-shell { position: sticky; top: 0; z-index: 3; padding: 6px 10px 4px; border-bottom: 1px solid var(--line-soft); background: rgba(17, 19, 24, 0.98); backdrop-filter: blur(10px); }
+    .topbar { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; min-height: 34px; }
     .topbar-main { min-width: 0; display: grid; gap: 4px; }
-    .topbar-title { font-size: 15px; font-weight: 700; line-height: 1.35; color: #f4f7fb; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .topbar-subtitle { color: var(--muted); font-size: 11px; line-height: 1.45; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden; }
-    .topbar-actions { display: flex; gap: 8px; align-items: center; }
-    .toolbar-button { border-radius: 8px; padding: 8px 12px; background: #11151c; border: 1px solid var(--line-soft); color: #dfe6f7; font-size: 12px; }
-    .toolbar-button.active { border-color: rgba(124, 184, 255, 0.35); background: #1a2230; }
+    .topbar-title { font-size: 13px; font-weight: 700; line-height: 1.3; color: #f4f7fb; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .topbar-subtitle { color: var(--muted); font-size: 10px; line-height: 1.35; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden; }
+    .topbar-actions { display: flex; gap: 6px; align-items: center; }
+    .icon-button { width: 28px; height: 28px; padding: 0; display: inline-flex; align-items: center; justify-content: center; background: transparent; border-color: transparent; color: #dfe6f7; }
+    .icon-button:hover { background: #181d25; border-color: #2e3541; }
+    .icon-button.active { background: #1a2230; border-color: rgba(124, 184, 255, 0.35); }
+    .icon-glyph { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; font-size: 14px; line-height: 1; color: inherit; }
+    .dock-glyph { position: relative; width: 14px; height: 12px; border: 1.3px solid currentColor; border-radius: 2px; }
+    .dock-glyph::before { content: ""; position: absolute; left: 4px; top: -1px; bottom: -1px; border-left: 1.3px solid currentColor; }
+    .dock-glyph::after { content: ""; position: absolute; left: 1px; top: 2px; width: 2px; height: 2px; border-radius: 999px; background: currentColor; opacity: 0.85; }
     .sidebar { padding: 16px 14px; border-right: 1px solid var(--line); background: linear-gradient(180deg, #0b0e14 0%, var(--sidebar) 100%); display: grid; gap: 12px; align-content: start; }
     .main { padding: 14px 16px; display: grid; gap: 12px; align-content: start; min-width: 0; }
     .workspace-shell { display: grid; gap: 12px; align-items: start; }
@@ -1836,13 +1847,13 @@ function renderThreadPanelHtml(nonce: string): string {
     .session-bar .session-title { font-size: 18px; font-weight: 700; line-height: 1.35; }
     .session-bar .session-summary { color: var(--muted); font-size: 13px; line-height: 1.6; max-width: 920px; }
     .session-meta { display: flex; flex-wrap: wrap; gap: 8px 12px; color: var(--muted); font-size: 12px; }
-    .chat-panel { min-height: 0; display: grid; gap: 8px; padding: 12px 0 8px; }
+    .chat-panel { min-height: 0; display: grid; gap: 8px; padding: 8px 0 6px; }
     .timeline-card { min-height: 0; }
-    .timeline { align-content: start; display: grid; gap: 14px; min-height: 0; height: 100%; max-height: none; overflow: auto; padding: 6px 4px 18px 0; }
-    .message { display: grid; gap: 8px; }
-    .message.user { margin-left: 28px; border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; background: #151b24; }
-    .message.assistant { margin-right: 0; padding: 0 0 6px; }
-    .message.system { padding: 0 0 6px; }
+    .timeline { align-content: start; display: grid; gap: 10px; min-height: 0; height: 100%; max-height: none; overflow: auto; padding: 2px 0 12px; }
+    .message { display: grid; gap: 6px; border-bottom: 1px solid rgba(42, 47, 58, 0.7); padding: 0 0 12px; }
+    .message.user { margin-left: 0; border: 0; border-radius: 0; padding: 0 0 10px; background: transparent; }
+    .message.assistant { margin-right: 0; padding: 0 0 12px; }
+    .message.system { padding: 0 0 10px; }
     .message-meta { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
     .message-author { display: flex; gap: 8px; align-items: flex-start; }
     .avatar { width: 24px; height: 24px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; background: #0f131b; border: 1px solid var(--line-soft); color: var(--accent-strong); font-size: 11px; font-weight: 700; flex: none; }
@@ -1852,8 +1863,8 @@ function renderThreadPanelHtml(nonce: string): string {
     .message.assistant .message-label, .message.system .message-label { font-size: 11px; color: #a9b5c6; letter-spacing: 0.04em; text-transform: uppercase; }
     .message.user .message-label { font-size: 12px; font-weight: 700; }
     .message-sub { font-size: 11px; color: var(--muted); margin-top: 1px; }
-    .message-title { font-size: 15px; font-weight: 700; line-height: 1.45; color: #f2f5fb; }
-    .message-body { color: #e2e8f5; font-size: 14px; line-height: 1.78; }
+    .message-title { font-size: 16px; font-weight: 700; line-height: 1.38; color: #f2f5fb; }
+    .message-body { color: #e6ebf6; font-size: 14px; line-height: 1.72; }
     .message-body code { font-family: var(--font-mono); }
     .message-chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
     .utility-panel { display: grid; gap: 12px; }
@@ -1863,30 +1874,30 @@ function renderThreadPanelHtml(nonce: string): string {
     .utility-body { display: grid; gap: 10px; }
     .utility-hint { color: var(--muted); font-size: 12px; }
     .drawer-backdrop { position: fixed; inset: 0; background: rgba(5, 7, 10, 0.56); z-index: 18; }
-    .panel-drawer { position: fixed; top: 10px; bottom: 10px; width: min(340px, calc(100vw - 24px)); border: 1px solid var(--line); border-radius: 12px; background: #10151c; box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28); z-index: 19; display: grid; gap: 12px; align-content: start; padding: 16px; overflow: auto; }
+    .panel-drawer { position: fixed; top: 8px; bottom: 8px; width: min(300px, calc(100vw - 16px)); border: 1px solid var(--line); border-radius: 8px; background: #10151c; box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28); z-index: 19; display: grid; gap: 10px; align-content: start; padding: 12px; overflow: auto; }
     .panel-drawer.left { left: 10px; }
     .drawer-head { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
     .drawer-title { font-size: 14px; font-weight: 700; color: #f4f7fb; }
     .drawer-subtitle { color: var(--muted); font-size: 12px; line-height: 1.45; }
     .drawer-close { border-radius: 8px; padding: 6px 10px; background: #11151c; border: 1px solid var(--line-soft); color: var(--muted); font-size: 12px; }
     .drawer-content { display: grid; gap: 12px; }
-    .change-card { border: 1px solid #2d3644; border-radius: 10px; background: #10161d; overflow: hidden; margin-top: 2px; }
-    .change-card-header { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--line-soft); background: #111820; }
-    .change-card-title { font-size: 13px; font-weight: 700; color: #eef3fb; }
+    .change-card { border: 1px solid #2d3644; border-radius: 8px; background: #10161d; overflow: hidden; margin-top: 4px; }
+    .change-card-header { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--line-soft); background: #111820; }
+    .change-card-title { font-size: 12px; font-weight: 700; color: #eef3fb; }
     .change-card-delta { display: flex; gap: 10px; font-size: 12px; font-weight: 700; }
     .delta-plus { color: #57c67f; }
     .delta-minus { color: #f06b77; }
     .change-file-list { display: grid; }
-    .change-file-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 14px; border-top: 1px solid var(--line-soft); }
+    .change-file-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 9px 12px; border-top: 1px solid var(--line-soft); }
     .change-file-row:first-child { border-top: 0; }
     .change-file-name { min-width: 0; font-size: 13px; line-height: 1.45; color: #eef3fb; word-break: break-all; }
     .change-file-stats { display: inline-flex; gap: 10px; font-size: 12px; font-weight: 700; }
-    .change-preview { margin: 0 14px 12px; border: 1px solid #334055; border-radius: 10px; overflow: hidden; background: #0f151c; }
-    .change-preview-head { display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 10px 12px; background: #121a23; border-bottom: 1px solid #334055; }
+    .change-preview { margin: 0 12px 10px; border: 1px solid #334055; border-radius: 8px; overflow: hidden; background: #0f151c; }
+    .change-preview-head { display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 8px 10px; background: #121a23; border-bottom: 1px solid #334055; }
     .change-preview-title { min-width: 0; font-size: 12px; font-weight: 600; color: #eef3fb; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .change-preview-body { padding: 12px; font-family: var(--font-mono); font-size: 12px; line-height: 1.55; color: #d8e2f1; white-space: pre-wrap; word-break: break-word; }
-    .change-actions { display: flex; gap: 8px; flex-wrap: wrap; padding: 0 14px 12px; }
-    .composer-dock { border-top: 1px solid var(--line-soft); background: rgba(17, 19, 24, 0.98); backdrop-filter: blur(10px); padding: 10px 18px 14px; }
+    .change-actions { display: flex; gap: 8px; flex-wrap: wrap; padding: 0 12px 10px; }
+    .composer-dock { border-top: 1px solid var(--line-soft); background: rgba(17, 19, 24, 0.98); backdrop-filter: blur(10px); padding: 8px 10px 10px; }
     @media (max-width: 1180px) { .two-col, .checkbox-grid { grid-template-columns: 1fr; } .message.user, .message.assistant { margin-left: 0; margin-right: 0; } }
     @media (max-width: 960px) { .layout { grid-template-columns: 1fr; } .sidebar { border-right: 0; border-bottom: 1px solid var(--line); } .main-shell { padding-left: 12px; padding-right: 12px; } .panel-drawer { width: calc(100vw - 20px); left: 10px; } .change-file-row { grid-template-columns: 1fr; } }
   </style>
@@ -2096,12 +2107,11 @@ function renderThreadPanelHtml(nonce: string): string {
     function renderTopBar() {
       const title = state.composeMode ? '새 세션' : ((state.currentThread && state.currentThread.title) || '세션을 선택하세요');
       const summary = state.live.activity.summary || ((state.currentThread && state.currentThread.lastEventText) || '채팅을 시작하면 결과가 여기에 이어집니다.');
-      const dockLabel = state.hostMode === 'editor' ? '도구처럼 쓰기' : '오른쪽 고정';
       return [
         '<div class="topbar">',
-        '  <div class="topbar-actions"><button class="toolbar-button ' + (showThreadDrawer ? 'active' : '') + '" data-action="toggle-thread-drawer">세션</button></div>',
+        '  <div class="topbar-actions"><button class="icon-button ' + (showThreadDrawer ? 'active' : '') + '" data-action="toggle-thread-drawer" title="세션 목록" aria-label="세션 목록"><span class="icon-glyph">≡</span></button></div>',
         '  <div class="topbar-main"><div class="topbar-title">' + esc(title) + '</div><div class="topbar-subtitle">' + esc(summary) + '</div></div>',
-        '  <div class="topbar-actions"><button class="toolbar-button" data-action="move-to-auxiliary">' + dockLabel + '</button><button class="toolbar-button" data-action="new-thread">새 세션</button></div>',
+        '  <div class="topbar-actions"><button class="icon-button" data-action="new-thread" title="새 세션" aria-label="새 세션"><span class="icon-glyph">+</span></button></div>',
         '</div>',
       ].join('');
     }
