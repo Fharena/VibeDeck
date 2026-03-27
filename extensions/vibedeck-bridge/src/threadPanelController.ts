@@ -202,12 +202,12 @@ class DefaultThreadPanelController implements ThreadPanelController {
 
   async openOrReveal(): Promise<void> {
     if (this.preferPanelHost && this.panel) {
-      this.panel.reveal(this.vscode.viewColumn.one);
+      this.panel.reveal(this.vscode.viewColumn.beside ?? this.vscode.viewColumn.one);
       await this.refresh();
       return;
     }
     if (this.panel) {
-      this.panel.reveal(this.vscode.viewColumn.one);
+      this.panel.reveal(this.vscode.viewColumn.beside ?? this.vscode.viewColumn.one);
       await this.refresh();
       return;
     }
@@ -218,7 +218,7 @@ class DefaultThreadPanelController implements ThreadPanelController {
   async openInEditor(): Promise<void> {
     this.preferPanelHost = true;
     if (this.panel) {
-      this.panel.reveal(this.vscode.viewColumn.one);
+      this.panel.reveal(this.vscode.viewColumn.beside ?? this.vscode.viewColumn.one);
       await this.refresh();
       return;
     }
@@ -995,7 +995,7 @@ class DefaultThreadPanelController implements ThreadPanelController {
     if (this.panel) {
       this.preferPanelHost = true;
       this.lastStatusMessage = statusMessage;
-      this.panel.reveal(this.vscode.viewColumn.one);
+      this.panel.reveal(this.vscode.viewColumn.beside ?? this.vscode.viewColumn.one);
       await this.refresh();
       return;
     }
@@ -1894,6 +1894,14 @@ function renderThreadPanelHtml(nonce: string): string {
       const action = target.dataset.action;
       if (action === "refresh") {
         post("refresh");
+        return;
+      }
+      if (action === "open-in-editor") {
+        post("open-in-editor");
+        return;
+      }
+      if (action === "open-in-sidebar") {
+        post("open-in-sidebar");
         return;
       }
       if (action === "toggle-thread-drawer") {
