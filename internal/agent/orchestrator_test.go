@@ -26,8 +26,8 @@ func TestOrchestratorPromptSubmitFlow(t *testing.T) {
 		t.Fatalf("handle envelope: %v", err)
 	}
 
-	if len(responses) != 3 {
-		t.Fatalf("expected 3 responses, got %d", len(responses))
+	if len(responses) != 4 {
+		t.Fatalf("expected 4 responses, got %d", len(responses))
 	}
 
 	if responses[0].Type != protocol.TypeCmdAck {
@@ -38,6 +38,9 @@ func TestOrchestratorPromptSubmitFlow(t *testing.T) {
 	}
 	if responses[2].Type != protocol.TypePatchReady {
 		t.Fatalf("response[2] should be PATCH_READY")
+	}
+	if responses[3].Type != protocol.TypePatchResult {
+		t.Fatalf("response[3] should be PATCH_RESULT")
 	}
 
 	var promptAck protocol.PromptAckPayload
@@ -55,14 +58,20 @@ func TestOrchestratorPromptSubmitFlow(t *testing.T) {
 	if !ok {
 		t.Fatalf("thread detail should exist")
 	}
-	if len(detail.Events) != 3 {
-		t.Fatalf("expected 3 thread events, got %+v", detail.Events)
+	if len(detail.Events) != 5 {
+		t.Fatalf("expected 5 thread events, got %+v", detail.Events)
 	}
 	if detail.Events[0].Kind != "prompt_submitted" {
 		t.Fatalf("expected first event prompt_submitted, got %+v", detail.Events[0])
 	}
 	if detail.Events[2].Kind != "patch_ready" {
 		t.Fatalf("expected patch_ready event, got %+v", detail.Events[2])
+	}
+	if detail.Events[3].Kind != "patch_apply_requested" {
+		t.Fatalf("expected patch_apply_requested event, got %+v", detail.Events[3])
+	}
+	if detail.Events[4].Kind != "patch_applied" {
+		t.Fatalf("expected patch_applied event, got %+v", detail.Events[4])
 	}
 }
 
@@ -81,8 +90,11 @@ func TestOrchestratorPatchApplyUnknownJob(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected error for unknown job")
 	}
-	if len(responses) != 1 || responses[0].Type != protocol.TypeCmdAck {
-		t.Fatalf("expected single CMD_ACK failure")
+	if len(responses) != 2 {
+		t.Fatalf("expected CMD_ACK and PATCH_RESULT failure, got %+v", responses)
+	}
+	if responses[0].Type != protocol.TypeCmdAck || responses[1].Type != protocol.TypePatchResult {
+		t.Fatalf("expected CMD_ACK then PATCH_RESULT failure, got %+v", responses)
 	}
 }
 
@@ -184,8 +196,8 @@ func TestOrchestratorPromptSubmitAppendsProviderVisibleEvents(t *testing.T) {
 	if !ok {
 		t.Fatalf("thread detail should exist")
 	}
-	if len(detail.Events) != 4 {
-		t.Fatalf("expected 4 thread events, got %+v", detail.Events)
+	if len(detail.Events) != 6 {
+		t.Fatalf("expected 6 thread events, got %+v", detail.Events)
 	}
 	providerEvent := detail.Events[2]
 	if providerEvent.Kind != "provider_message" || providerEvent.Role != "assistant" {
@@ -199,5 +211,11 @@ func TestOrchestratorPromptSubmitAppendsProviderVisibleEvents(t *testing.T) {
 	}
 	if detail.Events[3].Kind != "patch_ready" {
 		t.Fatalf("expected patch_ready after provider event, got %+v", detail.Events[3])
+	}
+	if detail.Events[4].Kind != "patch_apply_requested" {
+		t.Fatalf("expected patch_apply_requested after patch_ready, got %+v", detail.Events[4])
+	}
+	if detail.Events[5].Kind != "patch_applied" {
+		t.Fatalf("expected patch_applied after auto apply, got %+v", detail.Events[5])
 	}
 }

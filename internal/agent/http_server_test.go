@@ -245,14 +245,20 @@ func TestHTTPServerRunProfilesAndThreadsEndpoints(t *testing.T) {
 	if err := json.Unmarshal(detailRec.Body.Bytes(), &detail); err != nil {
 		t.Fatalf("decode thread detail: %v", err)
 	}
-	if len(detail.Events) != 3 {
-		t.Fatalf("expected 3 events, got %+v", detail.Events)
+	if len(detail.Events) != 5 {
+		t.Fatalf("expected 5 events, got %+v", detail.Events)
 	}
 	if detail.Thread.CurrentJobID == "" {
 		t.Fatalf("expected current job id to be set")
 	}
 	if detail.Events[2].Kind != "patch_ready" {
 		t.Fatalf("expected third event to be patch_ready, got %+v", detail.Events[2])
+	}
+	if detail.Events[3].Kind != "patch_apply_requested" {
+		t.Fatalf("expected fourth event to be patch_apply_requested, got %+v", detail.Events[3])
+	}
+	if detail.Events[4].Kind != "patch_applied" {
+		t.Fatalf("expected fifth event to be patch_applied, got %+v", detail.Events[4])
 	}
 	filesRaw, ok := detail.Events[2].Data["files"].([]any)
 	if !ok || len(filesRaw) == 0 {

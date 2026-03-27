@@ -94,10 +94,10 @@ const server = http.createServer(async (req, res) => {
           id: threadId,
           title: prompt.split("\n")[0] || "새 스레드",
           sessionId: threadId,
-          state: "patch_ready",
+          state: "applied",
           currentJobId: jobId,
-          lastEventKind: "patch_ready",
-          lastEventText: "notes.txt 변경 준비",
+          lastEventKind: "patch_applied",
+          lastEventText: "변경 반영됨",
           updatedAt: Date.now(),
         },
         liveState: {
@@ -108,10 +108,10 @@ const server = http.createServer(async (req, res) => {
         },
         operationState: {
           currentJobId: jobId,
-          phase: "reviewing",
+          phase: "applied",
           patchSummary: "notes.txt 변경 준비",
-          patchResultStatus: "",
-          patchResultMessage: "",
+          patchResultStatus: "success",
+          patchResultMessage: "patch applied",
           runProfileId: "",
           runStatus: "",
           runSummary: "",
@@ -157,6 +157,34 @@ const server = http.createServer(async (req, res) => {
             },
             at: Date.now(),
           },
+          {
+            id: "evt_apply_request",
+            threadId,
+            jobId,
+            kind: "patch_apply_requested",
+            role: "system",
+            title: "기본 변경 반영",
+            body: "mode=all",
+            data: {
+              mode: "all",
+              selectedCount: 0,
+            },
+            at: Date.now(),
+          },
+          {
+            id: "evt_apply",
+            threadId,
+            jobId,
+            kind: "patch_applied",
+            role: "system",
+            title: "변경 반영 결과",
+            body: "patch applied",
+            data: {
+              status: "success",
+              message: "patch applied",
+            },
+            at: Date.now(),
+          },
         ],
       };
       state.threads = [detail.thread];
@@ -165,6 +193,7 @@ const server = http.createServer(async (req, res) => {
         responses: [
           { type: "PROMPT_ACK", payload: { threadId, jobId } },
           { type: "PATCH_READY", payload: { jobId, summary: "notes.txt 변경 준비" } },
+          { type: "PATCH_RESULT", payload: { jobId, status: "success", message: "patch applied" } },
         ],
       });
     }
@@ -427,7 +456,7 @@ try {
   assert.match(activeHost.html, /세션/);
   assert.match(activeHost.html, /새 세션/);
   assert.match(activeHost.html, /세션 목록/);
-  assert.match(activeHost.html, /변경 반영/);
+  assert.match(activeHost.html, /change-card-status/);
   assert.match(activeHost.html, /이성 수준/);
   assert.match(activeHost.html, /model-preset/);
   assert.match(activeHost.html, /context-toggle/);
@@ -453,6 +482,7 @@ try {
   });
   await waitFor(() => (panelMessages.at(-1)?.state?.currentJobId || "") === "job_panel_smoke");
   await waitFor(() => (panelMessages.at(-1)?.state?.live?.participants?.[0]?.participantId || "") === "cursor-panel");
+  await waitFor(() => (panelMessages.at(-1)?.state?.derived?.patchResultStatus || "") === "success");
 
   fakeVscode.window.activeTextEditor = createEditor("src/live_sync.ts", {
     start: { line: 4, character: 2 },
@@ -476,12 +506,6 @@ try {
     "right-dock command should trigger views.moveViewRight",
   );
 
-  await panelMessageHandler({ type: "apply-patch" });
-  await waitFor(() => (panelMessages.at(-1)?.state?.derived?.patchResultStatus || "") === "failed");
-  const failedApplyState = panelMessages.at(-1).state;
-  assert.equal(failedApplyState.errorMessage, "patch apply blocked for smoke");
-  assert.equal(failedApplyState.derived.patchResultStatus, "failed");
-
   await panelMessageHandler({ type: "run-profile", profileId: "smoke" });
   await waitFor(() => (panelMessages.at(-1)?.state?.derived?.runStatus || "") === "passed");
   await panelMessageHandler({
@@ -495,6 +519,7 @@ try {
   const latestStateMessage = panelMessages.at(-1);
   assert.equal(latestStateMessage.type, "state");
   assert.equal(latestStateMessage.state.currentThread.id, "thread_panel_smoke");
+  assert.equal(latestStateMessage.state.derived.patchResultStatus, "success");
   assert.equal(latestStateMessage.state.derived.runStatus, "passed");
   assert.equal(latestStateMessage.state.derived.patchFiles[0].path, "notes.txt");
   assert.deepEqual(latestStateMessage.state.derived.currentJobFiles, ["notes.txt"]);
@@ -505,7 +530,7 @@ try {
   assert.equal(latestStateMessage.state.live.workspace.rootPath, "C:/demo/workspace");
   assert.deepEqual(latestStateMessage.state.live.workspace.patchFiles, ["notes.txt"]);
   assert.equal(latestStateMessage.state.live.composer.draftText, "shared smoke draft");
-  assert.equal(state.envelopes.map((item) => item.type).join(","), "PROMPT_SUBMIT,PATCH_APPLY,RUN_PROFILE,OPEN_LOCATION");
+  assert.equal(state.envelopes.map((item) => item.type).join(","), "PROMPT_SUBMIT,RUN_PROFILE,OPEN_LOCATION");
   assert.equal(state.envelopes[0].payload.model, "gpt-5.4");
   assert.equal(state.envelopes[0].payload.reasoningLevel, "high");
   assert.equal(state.openLocations.length, 1);

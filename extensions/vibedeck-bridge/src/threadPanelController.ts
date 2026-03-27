@@ -1912,22 +1912,22 @@ function renderThreadPanelHtml(nonce: string): string {
     .drawer-subtitle { color: var(--muted); font-size: 12px; line-height: 1.45; }
     .drawer-close { border-radius: 8px; padding: 6px 10px; background: #11151c; border: 1px solid var(--line-soft); color: var(--muted); font-size: 12px; }
     .drawer-content { display: grid; gap: 12px; }
-    .change-card { border: 1px solid #26313f; border-radius: 9px; background: #0f141b; overflow: hidden; margin-top: 2px; }
-    .change-card-header { display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 9px 11px; border-bottom: 1px solid var(--line-soft); background: #111820; }
-    .change-card-title { font-size: 12px; font-weight: 700; color: #eef3fb; }
-    .change-card-delta { display: flex; gap: 10px; font-size: 12px; font-weight: 700; }
+    .change-card { border: 1px solid #232932; border-radius: 10px; background: #10141b; overflow: hidden; margin-top: 6px; }
+    .change-card-header { display: grid; gap: 6px; padding: 10px 12px 8px; background: #10141b; }
+    .change-card-topline { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+    .change-card-title { font-size: 13px; font-weight: 700; color: #f1f5fb; }
+    .change-card-delta { display: inline-flex; gap: 10px; font-size: 12px; font-weight: 700; }
+    .change-card-status { display: inline-flex; align-self: flex-end; font-size: 11px; line-height: 1; padding: 5px 8px; border-radius: 999px; border: 1px solid #2a3240; color: #c6d0df; background: #131922; }
+    .change-card-status.ok { color: #8fe0a8; border-color: rgba(127, 216, 164, 0.24); background: rgba(127, 216, 164, 0.08); }
+    .change-card-status.warn { color: #f2c66b; border-color: rgba(242, 198, 107, 0.22); background: rgba(242, 198, 107, 0.08); }
+    .change-card-status.bad { color: #ff9aa0; border-color: rgba(255, 143, 147, 0.22); background: rgba(255, 143, 147, 0.08); }
     .delta-plus { color: #57c67f; }
     .delta-minus { color: #f06b77; }
-    .change-file-list { display: grid; }
-    .change-file-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 9px 12px; border-top: 1px solid var(--line-soft); }
+    .change-file-list { display: grid; padding-bottom: 4px; }
+    .change-file-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 11px 12px; border-top: 1px solid #20262f; }
     .change-file-row:first-child { border-top: 0; }
-    .change-file-name { min-width: 0; font-size: 13px; line-height: 1.45; color: #eef3fb; word-break: break-all; }
+    .change-file-name { min-width: 0; font-size: 13px; line-height: 1.4; color: #eef3fb; word-break: break-all; }
     .change-file-stats { display: inline-flex; gap: 10px; font-size: 12px; font-weight: 700; }
-    .change-preview { margin: 0 12px 10px; border: 1px solid #334055; border-radius: 8px; overflow: hidden; background: #0f151c; }
-    .change-preview-head { display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 8px 10px; background: #121a23; border-bottom: 1px solid #334055; }
-    .change-preview-title { min-width: 0; font-size: 12px; font-weight: 600; color: #eef3fb; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .change-preview-body { padding: 12px; font-family: var(--font-mono); font-size: 12px; line-height: 1.55; color: #d8e2f1; white-space: pre-wrap; word-break: break-word; }
-    .change-actions { display: flex; gap: 8px; flex-wrap: wrap; padding: 0 12px 10px; }
     .composer-dock { border-top: 1px solid var(--line-soft); background: rgba(17, 19, 24, 0.98); backdrop-filter: blur(10px); padding: 8px 0 10px; }
     @media (max-width: 1180px) { .two-col { grid-template-columns: 1fr; } .message.user .message-body-shell { width: min(100%, 760px); } }
     @media (max-width: 960px) { .layout { grid-template-columns: 1fr; } .sidebar { border-right: 0; border-bottom: 1px solid var(--line); } .main-shell { padding-left: 12px; padding-right: 12px; } .panel-drawer { width: calc(100vw - 20px); left: 10px; } .change-file-row { grid-template-columns: 1fr; } }
@@ -2539,32 +2539,26 @@ function renderThreadPanelHtml(nonce: string): string {
       const kind = String(item.kind || '').toLowerCase();
       if (kind === 'patch_ready') {
         const files = extractPatchFiles(item);
-        return files.length ? renderChangeCard(files) : '';
+        return files.length ? renderChangeCard(item, files) : '';
       }
       return '';
     }
 
-    function renderChangeCard(files) {
+    function renderChangeCard(item, files) {
       const stats = aggregatePatchStats(files);
-      const preview = renderPatchPreview(files[0]);
+      const status = patchStatusForJob(String(item.jobId || ''));
       return [
         '<section class="change-card">',
         '  <div class="change-card-header">',
-        '    <div class="change-card-title">' + esc(files.length + '개 파일 변경됨') + '</div>',
-        '    <div class="change-card-delta"><span class="delta-plus">+' + esc(String(stats.added)) + '</span><span class="delta-minus">-' + esc(String(stats.removed)) + '</span></div>',
+        '    <div class="change-card-topline"><div class="change-card-title">' + esc(files.length + '개 파일 변경됨') + '</div><div class="change-card-delta"><span class="delta-plus">+' + esc(String(stats.added)) + '</span><span class="delta-minus">-' + esc(String(stats.removed)) + '</span></div></div>',
+        (status ? '    <div class="change-card-status ' + esc(status.tone) + '">' + esc(status.label) + '</div>' : ''),
         '  </div>',
         '  <div class="change-file-list">' + files.map(function(file) {
           const fileStats = patchFileStats(file);
           return '<div class="change-file-row"><div class="change-file-name">' + esc(file.path || '-') + '</div><div class="change-file-stats"><span class="delta-plus">+' + esc(String(fileStats.added)) + '</span><span class="delta-minus">-' + esc(String(fileStats.removed)) + '</span></div></div>';
         }).join('') + '</div>',
-        preview,
-        '  <div class="change-actions"><button class="secondary" data-action="apply-patch"' + (state.currentJobId && files.length ? '' : ' disabled') + '>변경 반영</button>' + renderRunAction() + '</div>',
         '</section>',
       ].join('');
-    }
-
-    function renderRunAction() {
-      return '<button data-action="run-profile"' + (state.currentJobId && selectedRunProfileId ? '' : ' disabled') + '>실행</button>';
     }
 
     function normalizeStringList(value) {
@@ -2583,27 +2577,6 @@ function renderThreadPanelHtml(nonce: string): string {
         return eventFiles;
       }
       return Array.isArray(state.derived.patchFiles) ? state.derived.patchFiles : [];
-    }
-
-    function renderPatchPreview(file) {
-      if (!file || !Array.isArray(file.hunks) || !file.hunks.length) {
-        return '';
-      }
-      const previewLines = String(file.hunks[0].diff || '')
-        .split(/\\r?\\n/)
-        .filter(function(line) { return line.trim().length > 0; })
-        .slice(0, 8)
-        .join('\\n');
-      if (!previewLines) {
-        return '';
-      }
-      const stats = patchFileStats(file);
-      return [
-        '<div class="change-preview">',
-        '  <div class="change-preview-head"><div class="change-preview-title">' + esc(file.path || '-') + '</div><div class="change-card-delta"><span class="delta-plus">+' + esc(String(stats.added)) + '</span><span class="delta-minus">-' + esc(String(stats.removed)) + '</span></div></div>',
-        '  <div class="change-preview-body">' + esc(previewLines) + '</div>',
-        '</div>',
-      ].join('');
     }
 
     function aggregatePatchStats(files) {
@@ -2634,6 +2607,39 @@ function renderThreadPanelHtml(nonce: string): string {
         });
       });
       return { added: added, removed: removed };
+    }
+
+    function patchStatusForJob(jobId) {
+      let applying = false;
+      let resultStatus = '';
+
+      for (const event of state.events) {
+        if (jobId && event.jobId && event.jobId !== jobId) {
+          continue;
+        }
+        const kind = String(event.kind || '').toLowerCase();
+        if (kind === 'patch_apply_requested') {
+          applying = true;
+          continue;
+        }
+        if (kind === 'patch_applied' || kind === 'patch_result') {
+          resultStatus = String(event.data && event.data.status || '').toLowerCase();
+        }
+      }
+
+      if (resultStatus === 'success' || resultStatus === 'applied') {
+        return { label: '변경 반영됨', tone: 'ok' };
+      }
+      if (resultStatus === 'partial' || resultStatus === 'conflict') {
+        return { label: '일부 반영', tone: 'warn' };
+      }
+      if (resultStatus === 'failed') {
+        return { label: '반영 실패', tone: 'bad' };
+      }
+      if (applying || String(state.operation.phase || '').toLowerCase() === 'applying') {
+        return { label: '반영 중', tone: '' };
+      }
+      return null;
     }
 
     function normalizedRole(item) {

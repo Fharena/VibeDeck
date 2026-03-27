@@ -182,8 +182,30 @@ func (o *Orchestrator) handlePromptSubmit(ctx context.Context, env protocol.Enve
 		Message:  "task started",
 	})
 	patchReady, _ := protocol.NewEnvelope(env.SID, o.newID("patch_ready"), o.nextSeq(), protocol.TypePatchReady, patch)
+	autoApplyPayload := protocol.PatchApplyPayload{
+		JobID: jobID,
+		Mode:  "all",
+	}
+	autoApplyResult, autoApplyErr := o.applyPatchForJob(
+		ctx,
+		jobID,
+		autoApplyPayload,
+		"system",
+		"기본 변경 반영",
+	)
+	patchResult, _ := protocol.NewEnvelope(
+		env.SID,
+		o.newID("patch_result"),
+		o.nextSeq(),
+		protocol.TypePatchResult,
+		autoApplyResult,
+	)
 
-	return []protocol.Envelope{ack, promptAck, patchReady}, nil
+	if autoApplyErr != nil {
+		return []protocol.Envelope{ack, promptAck, patchReady, patchResult}, nil
+	}
+
+	return []protocol.Envelope{ack, promptAck, patchReady, patchResult}, nil
 }
 
 func (o *Orchestrator) handlePatchApply(ctx context.Context, env protocol.Envelope) ([]protocol.Envelope, error) {
@@ -192,16 +214,40 @@ func (o *Orchestrator) handlePatchApply(ctx context.Context, env protocol.Envelo
 		return o.ackFail(env, "invalid patch apply payload", err)
 	}
 
-	job, ok := o.getJob(payload.JobID)
+	result, err := o.applyPatchForJob(ctx, payload.JobID, payload, "user", "패치 적용 요청")
+	if err != nil {
+		ack, _ := protocol.NewCmdAck(env.SID, o.nextSeq(), env.RID, false, err.Error())
+		patchResult, _ := protocol.NewEnvelope(env.SID, o.newID("patch_result"), o.nextSeq(), protocol.TypePatchResult, result)
+		return []protocol.Envelope{ack, patchResult}, err
+	}
+
+	ack, _ := protocol.NewCmdAck(env.SID, o.nextSeq(), env.RID, true, "patch apply queued")
+	patchResult, _ := protocol.NewEnvelope(env.SID, o.newID("patch_result"), o.nextSeq(), protocol.TypePatchResult, result)
+
+	return []protocol.Envelope{ack, patchResult}, nil
+}
+
+func (o *Orchestrator) applyPatchForJob(
+	ctx context.Context,
+	jobID string,
+	payload protocol.PatchApplyPayload,
+	role string,
+	title string,
+) (protocol.PatchResultPayload, error) {
+	job, ok := o.getJob(jobID)
 	if !ok {
-		return o.ackFail(env, "job not found", fmt.Errorf("job %s not found", payload.JobID))
+		return protocol.PatchResultPayload{
+			JobID:   jobID,
+			Status:  "failed",
+			Message: fmt.Sprintf("job %s not found", jobID),
+		}, fmt.Errorf("job %s not found", jobID)
 	}
 
 	_, _ = o.threadStore.AppendEvent(job.ThreadID, ThreadEvent{
 		JobID: job.ID,
 		Kind:  "patch_apply_requested",
-		Role:  "user",
-		Title: "패치 적용 요청",
+		Role:  role,
+		Title: title,
 		Body:  fmt.Sprintf("mode=%s", payload.Mode),
 		Data: map[string]any{
 			"mode":          payload.Mode,
@@ -219,28 +265,33 @@ func (o *Orchestrator) handlePatchApply(ctx context.Context, env protocol.Envelo
 			JobID: job.ID,
 			Kind:  "patch_applied",
 			Role:  "system",
-			Title: "패치 적용 실패",
+			Title: "변경 반영 실패",
 			Body:  err.Error(),
 			Data: map[string]any{
 				"status":  "failed",
 				"message": err.Error(),
 			},
 		})
-		ack, _ := protocol.NewCmdAck(env.SID, o.nextSeq(), env.RID, false, err.Error())
-		patchResult, _ := protocol.NewEnvelope(env.SID, o.newID("patch_result"), o.nextSeq(), protocol.TypePatchResult, protocol.PatchResultPayload{
+		o.setJobState(job.ID, "failed")
+		return protocol.PatchResultPayload{
 			JobID:   payload.JobID,
 			Status:  "failed",
 			Message: err.Error(),
-		})
-		return []protocol.Envelope{ack, patchResult}, err
+		}, err
 	}
 
-	o.setJobState(payload.JobID, "applied")
+	status := strings.ToLower(strings.TrimSpace(result.Status))
+	if status == "failed" {
+		o.setJobState(job.ID, "failed")
+	} else {
+		o.setJobState(job.ID, "applied")
+	}
+
 	_, _ = o.threadStore.AppendEvent(job.ThreadID, ThreadEvent{
 		JobID: job.ID,
 		Kind:  "patch_applied",
 		Role:  "system",
-		Title: "패치 적용 결과",
+		Title: "변경 반영 결과",
 		Body:  result.Message,
 		Data: map[string]any{
 			"status":  result.Status,
@@ -248,14 +299,11 @@ func (o *Orchestrator) handlePatchApply(ctx context.Context, env protocol.Envelo
 		},
 	})
 
-	ack, _ := protocol.NewCmdAck(env.SID, o.nextSeq(), env.RID, true, "patch apply queued")
-	patchResult, _ := protocol.NewEnvelope(env.SID, o.newID("patch_result"), o.nextSeq(), protocol.TypePatchResult, protocol.PatchResultPayload{
+	return protocol.PatchResultPayload{
 		JobID:   payload.JobID,
 		Status:  result.Status,
 		Message: result.Message,
-	})
-
-	return []protocol.Envelope{ack, patchResult}, nil
+	}, nil
 }
 
 func (o *Orchestrator) handleRunProfile(ctx context.Context, env protocol.Envelope) ([]protocol.Envelope, error) {
