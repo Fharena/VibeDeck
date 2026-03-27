@@ -390,7 +390,7 @@ function buildWarning(
   publicAgentBaseUrl: string,
 ): string {
   if (isLoopbackHost(settings.agentHost)) {
-    return `현재 local agent가 ${settings.agentHost}:${settings.agentPort} loopback에만 바인딩돼 있어 휴대폰이 직접 붙지 못합니다. Cursor 설정에서 vibedeckBridge.agent.host를 0.0.0.0으로 바꾸고 VibeDeck: Restart Local Agent를 실행하세요. signaling 서버도 별도로 실행해야 합니다.`;
+    return `현재 local agent가 ${settings.agentHost}:${settings.agentPort} loopback에만 바인딩돼 있어 휴대폰이 직접 붙지 못합니다. Cursor 설정에서 vibedeckBridge.agent.host를 0.0.0.0으로 바꾸고 VibeDeck: Restart Local Agent를 실행하세요. signaling은 extension이 자동으로 같이 올립니다.`;
   }
   if (isLoopbackHost(host)) {
     return "LAN 주소를 찾지 못해 localhost 기반 링크를 만들었습니다. 휴대폰에서는 직접 연결되지 않을 수 있습니다.";
@@ -407,7 +407,7 @@ function describeBootstrapError(error: unknown): string {
     return "로컬 agent에 연결하지 못했습니다. 먼저 VibeDeck: Restart Local Agent를 실행해 보세요. 실기기 연결이라면 vibedeckBridge.agent.host를 0.0.0.0으로 바꾸고 다시 시도해야 합니다.";
   }
   if (message.includes("ETIMEDOUT") || message.includes("timed out")) {
-    return "로컬 agent 응답이 시간 안에 오지 않았습니다. agent 상태와 signaling 실행 여부를 다시 확인하세요.";
+    return "로컬 agent 응답이 시간 안에 오지 않았습니다. agent/signaling 상태를 다시 확인하세요.";
   }
   return message;
 }

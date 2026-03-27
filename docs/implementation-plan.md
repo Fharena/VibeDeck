@@ -242,7 +242,7 @@
   - 검증: `npm --prefix extensions/vibedeck-bridge run build` 통과, `npm --prefix extensions/vibedeck-bridge run smoke:panel` 통과
 - 2026-03-18 / 모바일 bootstrap local agent 자동 복구와 실기기 안내 보강
   - `Open Mobile Bootstrap` 진입 시 local agent가 꺼져 있으면 먼저 자동으로 시작을 시도하도록 보강
-  - 부트스트랩 패널과 오류 메시지에 `vibedeckBridge.agent.host=0.0.0.0`, `VibeDeck: Restart Local Agent`, `signaling` 별도 실행 필요를 한국어로 명시
+  - 부트스트랩 패널과 오류 메시지에 `vibedeckBridge.agent.host=0.0.0.0`, `VibeDeck: Restart Local Agent`, signaling 준비 상태를 한국어로 명시
   - 검증: `npm --prefix extensions/vibedeck-bridge run build` 통과, `npm --prefix extensions/vibedeck-bridge run smoke:mobile-bootstrap` 통과
 - 2026-03-26 / control timeout budget 운영 설정 외부화
   - agent의 HTTP/P2P control timeout을 환경변수(`CONTROL_TIMEOUT_DEFAULT`, `CONTROL_TIMEOUT_PROMPT_SUBMIT`, `CONTROL_TIMEOUT_PATCH_APPLY`, `CONTROL_TIMEOUT_RUN_PROFILE`)로 조정할 수 있게 정리
@@ -253,6 +253,10 @@
   - extension local agent가 bridge 재시작 뒤 기존 8080 agent를 그대로 재사용하지 않고, 먼저 종료한 뒤 새 bridge 기준으로 다시 시작하도록 정리
   - agent에 `/v1/agent/runtime/shutdown` 엔드포인트를 추가해 extension이 안전하게 종료를 요청할 수 있게 하고, 종료 실패 시에는 포트 점유 프로세스 정리 경로로 폴백
   - 검증: `go test ./internal/agent -run "TestHTTPServerRuntime(Adapter|Shutdown)|TestHTTPServerBootstrapEndpoint"` 통과, `npm --prefix extensions/vibedeck-bridge run build` 통과, `npm --prefix extensions/vibedeck-bridge run smoke:bootstrap` 통과
+- 2026-03-27 / signaling 자동 기동과 모바일 bootstrap 세팅 자동화
+  - extension이 bridge/local agent와 함께 로컬 signaling 프로세스도 자동으로 관리하도록 `signaling.autoStart`, `signaling.launchMode`, `signaling.host/port` 설정을 추가
+  - `Open Mobile Bootstrap`과 상태 표면이 signaling을 별도 수동 실행 전제로 안내하지 않도록 정리하고, bridge status에 signaling 상태를 같이 노출
+  - 검증: `npm --prefix extensions/vibedeck-bridge run build` 통과, `npm --prefix extensions/vibedeck-bridge run smoke:bootstrap` 통과, `npm --prefix extensions/vibedeck-bridge run smoke:mobile-bootstrap` 통과
 - 2026-03-26 / 채팅 우선 UX 정리
   - extension shared threads를 `메인 채팅 + 세션 드로어` 구조로 다시 잘라 Cursor 채팅창처럼 기본 화면에는 대화와 composer만 남기도록 정리
   - 우측 보조 패널은 제거하고, 패치/실행/파일 상태는 채팅 안의 인라인 변경 카드와 결과 카드로 흡수
