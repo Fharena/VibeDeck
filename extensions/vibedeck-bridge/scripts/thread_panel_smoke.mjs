@@ -428,6 +428,9 @@ try {
   assert.match(activeHost.html, /새 세션/);
   assert.match(activeHost.html, /세션 목록/);
   assert.match(activeHost.html, /변경 반영/);
+  assert.match(activeHost.html, /이성 수준/);
+  assert.match(activeHost.html, /model-preset/);
+  assert.match(activeHost.html, /context-toggle/);
   assert.match(activeHost.html, /icon-button/);
   assert.equal(activeHost.options.enableScripts, true);
   const embeddedScript = activeHost.html.match(/<script nonce="[^"]*">([\s\S]*)<\/script>/)?.[1] ?? "";
@@ -439,6 +442,8 @@ try {
   await panelMessageHandler({
     type: "submit-prompt",
     prompt: "Create notes.txt hello world",
+    model: "gpt-5.4",
+    reasoningLevel: "high",
     contextOptions: {
       includeActiveFile: true,
       includeSelection: false,
@@ -501,6 +506,8 @@ try {
   assert.deepEqual(latestStateMessage.state.live.workspace.patchFiles, ["notes.txt"]);
   assert.equal(latestStateMessage.state.live.composer.draftText, "shared smoke draft");
   assert.equal(state.envelopes.map((item) => item.type).join(","), "PROMPT_SUBMIT,PATCH_APPLY,RUN_PROFILE,OPEN_LOCATION");
+  assert.equal(state.envelopes[0].payload.model, "gpt-5.4");
+  assert.equal(state.envelopes[0].payload.reasoningLevel, "high");
   assert.equal(state.openLocations.length, 1);
 
   console.log(JSON.stringify({

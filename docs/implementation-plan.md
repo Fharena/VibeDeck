@@ -270,6 +270,12 @@
   - `공유 세션을 오른쪽 보조 사이드바로 배치` 명령은 더 이상 quick pick을 열지 않고, 같은 `views.moveViewRight` 경로로 바로 도킹한 뒤 보조 사이드바에 포커스를 맞추도록 단순화
   - 웹뷰 상단의 긴 `도구처럼 쓰기/오른쪽 고정` 텍스트 버튼은 제거하고, 세션 드로어와 새 세션만 남긴 더 얇은 상단 바와 네이티브 제목줄 토글 아이콘 중심으로 정리
   - 검증: `npm --prefix extensions/vibedeck-bridge run build` 통과, `npm --prefix extensions/vibedeck-bridge run smoke:panel` 통과
+- 2026-03-27 / shared threads 채팅 본문과 composer 메타 정리
+  - shared threads 메인 피드에서 `사용자/에이전트` 라벨, `패치 적용 결과`, `실행 결과`, `고급 옵션` 같은 저신호 표면을 걷어내고 `대화 + 변경 요약` 중심으로 다시 정리
+  - assistant 답변은 headings, 리스트, 코드 블록을 읽을 수 있는 markdown 렌더로 바꾸고, user prompt는 우측 compact bubble로 정리
+  - composer는 `+` 컨텍스트 메뉴와 `모델`, `이성 수준` 선택을 하단에 고정해 provider-neutral prompt 메타데이터를 보낼 수 있게 정리
+  - protocol/agent/cursor bridge adapter에 `model`, `reasoningLevel`을 추가해 현재 Cursor 경로와 이후 Codex/Claude provider 확장 준비를 같이 열어둠
+  - 검증: `npm --prefix adapters/cursor-bridge run build` 통과, `npm --prefix extensions/vibedeck-bridge run build` 통과, `npm --prefix extensions/vibedeck-bridge run smoke:panel` 통과, `go test ./internal/agent -run "TestOrchestrator|TestHTTPServerBootstrapEndpoint|TestCursorAgentCLIAdapterRunProfileAndContext"` 통과
 
 ## 다음 작업 우선순위
 

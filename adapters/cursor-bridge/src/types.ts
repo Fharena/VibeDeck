@@ -29,6 +29,8 @@ export interface ContextRequest {
 export interface SubmitTaskInput {
   prompt: string;
   template?: string;
+  model?: string;
+  reasoningLevel?: string;
   context: WorkspaceContext;
 }
 

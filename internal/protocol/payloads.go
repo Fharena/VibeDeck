@@ -11,6 +11,8 @@ type PromptSubmitPayload struct {
 	ThreadID       string         `json:"threadId,omitempty"`
 	Prompt         string         `json:"prompt"`
 	Template       string         `json:"template,omitempty"`
+	Model          string         `json:"model,omitempty"`
+	ReasoningLevel string         `json:"reasoningLevel,omitempty"`
 	ContextOptions ContextOptions `json:"contextOptions"`
 }
 

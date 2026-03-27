@@ -225,7 +225,7 @@ export class CursorAgentCommandAdapter implements WorkspaceAdapter {
       await this.commitWorktreeBaseline(worktreeDir);
 
       const prompt = buildCursorAgentPrompt(input);
-      const cursorOutput = await this.runCursorAgent(worktreeDir, prompt);
+      const cursorOutput = await this.runCursorAgent(worktreeDir, prompt, input.model);
       const rawDiff = await this.runGit(worktreeDir, ["diff", "--binary", "HEAD", "--", "."]);
       const parsed = parseUnifiedPatch(rawDiff);
       const summary = taskSummary(cursorOutput, parsed);
@@ -358,8 +358,12 @@ export class CursorAgentCommandAdapter implements WorkspaceAdapter {
     ]);
   }
 
-  private async runCursorAgent(worktreeDir: string, prompt: string): Promise<string> {
-    const cursorArgs = [...this.config.cursorAgentArgs, prompt];
+  private async runCursorAgent(
+    worktreeDir: string,
+    prompt: string,
+    modelOverride?: string,
+  ): Promise<string> {
+    const cursorArgs = [...withCursorAgentModelArg(this.config.cursorAgentArgs, modelOverride), prompt];
     if (!this.config.useWsl) {
       const result = await runCommand(this.config.cursorAgentBin, cursorArgs, {
         cwd: worktreeDir,
@@ -521,6 +525,13 @@ function buildCursorAgentPrompt(input: SubmitTaskInput): string {
   if (input.template) {
     lines.push(`Template: ${input.template}`);
   }
+  if (input.model) {
+    lines.push(`Requested model: ${input.model}`);
+  }
+  if (input.reasoningLevel) {
+    lines.push(`Reasoning level: ${input.reasoningLevel}`);
+    lines.push(reasoningInstruction(input.reasoningLevel));
+  }
   lines.push("User request:");
   lines.push(input.prompt.trim());
   if (input.context.activeFilePath) {
@@ -539,6 +550,38 @@ function buildCursorAgentPrompt(input: SubmitTaskInput): string {
     }
   }
   return lines.join("\n");
+}
+
+function reasoningInstruction(level: string): string {
+  switch (String(level).trim().toLowerCase()) {
+    case "low":
+      return "Prefer a quick direct solution. Keep exploration and explanation short.";
+    case "high":
+      return "Spend more time planning, verifying, and reviewing before editing files.";
+    default:
+      return "Use a balanced amount of planning before editing files.";
+  }
+}
+
+function withCursorAgentModelArg(args: string[], model: string | undefined): string[] {
+  const normalizedModel = String(model ?? "").trim();
+  if (!normalizedModel) {
+    return [...args];
+  }
+  const next: string[] = [];
+  for (let index = 0; index < args.length; index += 1) {
+    const current = args[index];
+    if (current === "--model") {
+      index += 1;
+      continue;
+    }
+    if (current.startsWith("--model=")) {
+      continue;
+    }
+    next.push(current);
+  }
+  next.push("--model", normalizedModel);
+  return next;
 }
 
 function parseUnifiedPatch(raw: string): UnifiedPatch {
